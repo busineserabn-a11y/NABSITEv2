@@ -578,16 +578,12 @@ export interface MenuItem {
 }
 
 export interface LandingHeroSettings {
-  backgroundType: 'animated' | 'image' | 'video' | 'gradient' | 'custom' | 'solid';
-  bgType?: 'animated' | 'image' | 'video' | 'gradient' | 'custom' | 'solid' | string;
+  backgroundType: 'gradient' | 'image' | 'video' | 'animated' | 'solid';
+  bgType?: 'gradient' | 'image' | 'video' | 'animated' | 'solid' | string;
   imageUrl?: string;
   mobileImageUrl?: string;
   videoUrl?: string;
-  mobileVideoUrl?: string;
-  videoPosterUrl?: string;
-  autoplay?: boolean;
-  muted?: boolean;
-  loop?: boolean;
+  videoFallbackImageUrl?: string;
   overlayOpacity?: number; // 0 to 100
   blur?: number; // px
   brightness?: number; // %
@@ -601,28 +597,8 @@ export interface LandingHeroSettings {
   secondaryCtaText?: string;
   secondaryCtaUrl?: string;
   heroAlignment?: 'center' | 'left';
-  motionIntensity?: 'low' | 'medium' | 'high' | 'subtle' | 'normal' | 'expressive' | 'off';
+  motionIntensity?: 'subtle' | 'normal' | 'expressive' | 'off';
   showMotionElements?: boolean;
-  // Deep visual animation controls
-  enableHands?: boolean;
-  enableParticles?: boolean;
-  enableFloatingCards?: boolean;
-  enableParallax?: boolean;
-  enableGlow?: boolean;
-}
-
-export interface TemplateStatusOverride {
-  active?: boolean;
-  featured?: boolean;
-  recommended?: boolean;
-  hidden?: boolean;
-  isDefault?: boolean;
-  order?: number;
-}
-
-export interface TemplateSettings {
-  defaultTemplatesByCategory: Record<string, string>;
-  templateOverrides: Record<string, TemplateStatusOverride>;
 }
 
 export interface PlatformSettings {
@@ -653,7 +629,6 @@ export interface PlatformSettings {
     cardSize?: 'compact' | 'normal' | 'spacious';
   };
   heroSettings?: LandingHeroSettings;
-  templateSettings?: TemplateSettings;
 }
 
 export interface AuditLog {

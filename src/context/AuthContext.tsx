@@ -6,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password?: string) => Promise<User>;
-  ownerLogin: (email: string, password?: string) => Promise<User>;
+  ownerLogin: (key?: string, email?: string) => Promise<User>;
   logout: () => void;
   hasRole: (roles: Role[]) => boolean;
   hasPermission: (permission: SubAdminPermission) => boolean;
@@ -69,10 +69,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const ownerLogin = async (email: string, password?: string): Promise<User> => {
+  const ownerLogin = async (key?: string, email?: string): Promise<User> => {
     setIsLoading(true);
     try {
-      const res = await api.ownerLogin(email, password);
+      const res = await api.ownerLogin(key, email);
       setAuthToken(res.token);
       setUser(res.user);
       return res.user;

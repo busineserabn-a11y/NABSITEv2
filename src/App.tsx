@@ -14,8 +14,6 @@ import { CompanyQrPage as PublicCompanyQrPage } from './pages/public/CompanyQrPa
 import { LoginPage } from './pages/auth/LoginPage';
 import { MastermindLoginPage } from './pages/auth/MastermindLoginPage';
 import { OwnerGatewayPage } from './pages/auth/OwnerGatewayPage';
-import { PlatformAccessPage } from './pages/auth/PlatformAccessPage';
-import { AccessDeniedPage } from './pages/auth/AccessDeniedPage';
 
 // Studio & Wizard pages
 import { WebsiteStudioPage } from './pages/studio/WebsiteStudioPage';

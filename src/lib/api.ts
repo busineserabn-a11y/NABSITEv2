@@ -96,10 +96,8 @@ export const api = {
   // Auth
   login: (email: string, password?: string) =>
     request<{ user: User; token: string }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  ownerLogin: (email: string, password?: string) =>
-    request<{ user: User; token: string }>('/auth/owner-login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  platformAccess: (email: string, password: string) =>
-    request<{ user: User; token: string }>('/auth/platform-access', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  ownerLogin: (key?: string, email?: string) =>
+    request<{ user: User; token: string }>('/auth/owner-login', { method: 'POST', body: JSON.stringify({ key, email }) }),
   getMe: () => request<{ user: User }>('/auth/me'),
 
   // Companies
@@ -134,22 +132,11 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(updates),
     }),
-  changeTemplate: (id: string, themeId: string, applyPresetColors = true) =>
-    request<{ success: boolean; website: Website; message: string }>(`/websites/${id}/change-template`, {
-      method: 'POST',
-      body: JSON.stringify({ themeId, applyPresetColors }),
-    }),
   publishWebsite: (id: string) => request<{ success: boolean; website: Website }>(`/websites/${id}/publish`, { method: 'POST' }),
   unpublishWebsite: (id: string) => request<{ success: boolean; website: Website }>(`/websites/${id}/unpublish`, { method: 'POST' }),
 
-  // Themes & Templates
+  // Themes & Features
   getThemes: () => request<ThemeDefinition[]>('/themes'),
-  getOwnerTemplates: () => request<{ templates: any[]; defaultsByCategory: Record<string, string> }>('/owner/templates'),
-  updateTemplateSettings: (data: { defaultTemplatesByCategory?: Record<string, string>; templateOverrides?: Record<string, any> }) =>
-    request<{ success: boolean; templateSettings: any }>('/owner/templates/settings', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
   getFeatures: () => request<FeatureDefinition[]>('/features'),
 
   // Products
