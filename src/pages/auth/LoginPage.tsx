@@ -107,40 +107,56 @@ export const LoginPage: React.FC = () => {
           {/* Quick Demo Switcher */}
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
             <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">
-              Instant Demo Access
+              Instant 1-Click Access
             </p>
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => handleDemoLogin('abenezarofficial1@gmail.com')}
+                className="p-2.5 text-left rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+              >
+                <div className="flex items-center gap-1 mb-0.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <p className="text-xs font-bold text-amber-900 dark:text-amber-200">Owner</p>
+                </div>
+                <p className="text-[10px] text-slate-500">Mastermind</p>
+              </button>
+
               <button
                 type="button"
                 onClick={() => handleDemoLogin('admin@nabsite.io')}
-                className="p-3 text-left rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                className="p-2.5 text-left rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
-                <div className="flex items-center gap-1.5 mb-0.5">
+                <div className="flex items-center gap-1 mb-0.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
                   <p className="text-xs font-bold text-slate-900 dark:text-white">Admin</p>
                 </div>
-                <p className="text-[10px] text-slate-500">Full Workspace Access</p>
+                <p className="text-[10px] text-slate-500">All Tenants</p>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleDemoLogin('manager@addisgourmet.com')}
-                className="p-3 text-left rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                className="p-2.5 text-left rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
-                <div className="flex items-center gap-1.5 mb-0.5">
+                <div className="flex items-center gap-1 mb-0.5">
                   <Building2 className="w-3.5 h-3.5 text-emerald-500" />
                   <p className="text-xs font-bold text-slate-900 dark:text-white">Sub-Admin</p>
                 </div>
-                <p className="text-[10px] text-slate-500">Addis Gourmet Store</p>
+                <p className="text-[10px] text-slate-500">Addis Gourmet</p>
               </button>
             </div>
           </div>
         </Card>
 
-        {/* Back Link */}
-        <div className="text-center">
-          <Link to="/" className="text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white">
-            ← Return to Discovery Platform
+        {/* Mastermind Link */}
+        <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+          <Link to="/" className="hover:text-slate-900 dark:hover:text-white">
+            ← Return to Discovery
+          </Link>
+          <Link to="/mastermindlogin" className="text-amber-600 dark:text-amber-400 font-bold hover:underline flex items-center gap-1">
+            <Key className="w-3.5 h-3.5" />
+            Mastermind Clearance Portal →
           </Link>
         </div>
       </div>

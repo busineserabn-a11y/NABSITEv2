@@ -48,19 +48,38 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...(options.headers || {}),
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (err: any) {
+    throw new ApiError(0, err?.message || 'Network request failed');
+  }
 
-  const isJson = response.headers.get('content-type')?.includes('application/json');
-  const data = isJson ? await response.json() : null;
+  const contentType = response.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
 
   if (!response.ok) {
-    const errorMsg = data?.error || data?.message || `HTTP ${response.status}: ${response.statusText}`;
+    let errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+    let data: any = null;
+    if (isJson) {
+      try {
+        data = await response.json();
+        errorMsg = data?.error || data?.message || errorMsg;
+      } catch {
+        // ignore json parse error
+      }
+    }
     throw new ApiError(response.status, errorMsg, data);
   }
 
+  if (!isJson) {
+    throw new ApiError(500, 'Invalid response format from server');
+  }
+
+  const data = await response.json();
   return data as T;
 }
 
