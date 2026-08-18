@@ -40,8 +40,8 @@ export const CompanyQrPage: React.FC = () => {
     if (!id) return;
     setLoading(true);
     try {
-      const res = await api.getCompany(id);
-      const comp = res?.company || (res as any);
+      const res: any = await api.getCompany(id);
+      const comp = res?.company || res;
       if (comp) {
         setCompany(comp);
         const pubUrl = `https://nabsite.et/c/${comp.slug}`;

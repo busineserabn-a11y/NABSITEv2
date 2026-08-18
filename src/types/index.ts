@@ -93,13 +93,15 @@ export interface Company {
   phone: string;
   email: string;
   address: string;
+  city?: string;
+  websiteId?: string;
   mapLink?: string;
-  hours: DayHours[];
+  hours?: DayHours[];
   telegramUsername?: string;
   telegramPhone?: string;
-  socialLinks: SocialLinks;
+  socialLinks?: SocialLinks;
   status: CompanyStatus;
-  websiteStatus: WebsiteStatus;
+  websiteStatus?: WebsiteStatus;
   assignedAdminId?: string;
   subAdminIds?: string[];
   metadata?: Record<string, any>;
@@ -188,14 +190,15 @@ export interface PageSeo {
 
 export interface PageConfig {
   id: string;
-  name: string;
+  name?: string;
   slug: string;
   title: string;
   description?: string;
-  order: number;
-  isHome: boolean;
-  isPublished: boolean;
-  isHidden: boolean;
+  order?: number;
+  isHome?: boolean;
+  isPublished?: boolean;
+  isHidden?: boolean;
+  showInNavigation?: boolean;
   sections: SectionConfig[];
   seo?: PageSeo;
 }
@@ -296,6 +299,7 @@ export interface WebsiteConfig {
 export interface Website {
   id: string;
   companyId: string;
+  templateId?: string;
   themeId: string;
   status: WebsiteStatus;
   draftConfig: WebsiteConfig;
@@ -373,9 +377,10 @@ export interface ProductCategory {
   id: string;
   companyId: string;
   name: string;
+  slug?: string;
   description?: string;
-  sortOrder: number;
-  visibility: boolean;
+  sortOrder?: number;
+  visibility?: boolean;
 }
 
 export interface Product {
@@ -384,16 +389,19 @@ export interface Product {
   categoryId?: string;
   name: string;
   description: string;
-  price: number;
+  price: number | string;
   currency: string;
   image: string;
   sku?: string;
-  status: ProductStatus;
-  visibility: boolean;
-  featured: boolean;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
+  status?: ProductStatus;
+  visibility?: boolean;
+  featured?: boolean;
+  isFeatured?: boolean;
+  isAvailable?: boolean;
+  tags?: string[];
+  sortOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Review {
@@ -481,19 +489,22 @@ export interface Invitation {
 export interface QrConfig {
   id: string;
   companyId: string;
-  name: string;
+  name?: string;
+  title?: string;
   targetUrl: string;
-  targetType: 'website' | 'store' | 'menu' | 'offer' | 'contact' | 'custom_page' | 'custom_url';
-  frame: 'none' | 'simple' | 'badge' | 'card' | 'speech_bubble';
-  caption: string;
-  style: 'squares' | 'dots' | 'rounded';
+  targetType?: 'website' | 'store' | 'menu' | 'offer' | 'contact' | 'custom_page' | 'custom_url';
+  frame?: 'none' | 'simple' | 'badge' | 'card' | 'speech_bubble';
+  frameStyle?: string;
+  caption?: string;
+  style?: 'squares' | 'dots' | 'rounded';
   fgColor: string;
   bgColor: string;
   logo?: string;
-  size: number;
+  size?: number;
+  margin?: number;
   scanCount: number;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 export type AnalyticsEventType =

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Lock, Mail, ShieldCheck, ArrowRight, Sparkles, Building2, User, Key } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Lock, Mail, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -9,45 +9,32 @@ import { Card } from '../../components/ui/Card';
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [fullName, setFullName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, register } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    if (!email || !password) return;
     setError(null);
     setLoading(true);
     try {
-      const authUser = await login(email, password);
-      if (authUser?.role === 'OWNER') {
-        navigate('/mastermind');
-        return;
+      if (isRegisterMode) {
+        if (!fullName.trim()) {
+          setError('Please provide your full name');
+          setLoading(false);
+          return;
+        }
+        await register(email, password, fullName);
+      } else {
+        await login(email, password);
       }
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please check credentials.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemoLogin = async (demoEmail: string, demoPassword?: string) => {
-    setEmail(demoEmail);
-    const pwd = demoPassword || (demoEmail.includes('abenezar') || demoEmail.includes('owner') ? 'NaB-is-ABN' : 'password');
-    setPassword(pwd);
-    setError(null);
-    setLoading(true);
-    try {
-      const user = await login(demoEmail, pwd);
-      if (user?.role === 'OWNER') {
-        navigate('/mastermind');
-      } else {
-        navigate('/dashboard');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Demo login failed');
+      setError(err.message || 'Authentication failed. Please check credentials.');
     } finally {
       setLoading(false);
     }
@@ -58,26 +45,39 @@ export const LoginPage: React.FC = () => {
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center font-extrabold text-2xl mx-auto shadow-md">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-extrabold text-2xl mx-auto shadow-md">
             N
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            NABSITE Business Portal
+          <h1 className="text-2xl font-extrabold tracking-tight text-white">
+            {isRegisterMode ? 'Create NABSITE Account' : 'NABSITE Business Portal'}
           </h1>
-          <p className="text-xs text-slate-500 max-w-xs mx-auto">
-            Authorized sign in for company administrators and assigned managers.
+          <p className="text-xs text-slate-400 max-w-xs mx-auto">
+            {isRegisterMode
+              ? 'Register your account to manage your company and digital presence.'
+              : 'Sign in to access your company dashboard, digital menu, and website.'}
           </p>
         </div>
 
         {/* Login Card */}
-        <Card variant="bordered" padding="lg" className="space-y-6 shadow-xl">
+        <Card variant="bordered" padding="lg" className="space-y-6 shadow-xl bg-slate-900 border-slate-800">
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium rounded-xl">
+            <div className="p-3 bg-rose-950/80 border border-rose-800 text-rose-300 text-xs font-medium rounded-xl">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {isRegisterMode && (
+              <Input
+                label="Full Name"
+                type="text"
+                required
+                placeholder="e.g. Dawit Haile"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
+            )}
+
             <Input
               label="Business Email"
               type="email"
@@ -91,6 +91,7 @@ export const LoginPage: React.FC = () => {
             <Input
               label="Password"
               type="password"
+              required
               placeholder="••••••••"
               icon={Lock}
               value={password}
@@ -99,72 +100,30 @@ export const LoginPage: React.FC = () => {
 
             <Button
               type="submit"
-              variant="primary"
-              size="md"
-              className="w-full"
-              isLoading={loading}
-              icon={ArrowRight}
-              iconPosition="right"
+              variant="gold"
+              size="lg"
+              disabled={loading}
+              className="w-full font-bold text-slate-950"
             >
-              Sign In to Workspace
+              {loading ? 'Authenticating...' : isRegisterMode ? 'Register Account' : 'Sign In'}
             </Button>
           </form>
 
-          {/* Quick Demo Switcher */}
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">
-              Instant 1-Click Access
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('abenezarofficial1@gmail.com')}
-                className="p-2.5 text-left rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
-              >
-                <div className="flex items-center gap-1 mb-0.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                  <p className="text-xs font-bold text-amber-900 dark:text-amber-200">Owner</p>
-                </div>
-                <p className="text-[10px] text-slate-500">Mastermind</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('admin@nabsite.io')}
-                className="p-2.5 text-left rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                <div className="flex items-center gap-1 mb-0.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
-                  <p className="text-xs font-bold text-slate-900 dark:text-white">Admin</p>
-                </div>
-                <p className="text-[10px] text-slate-500">All Tenants</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('manager@addisgourmet.com')}
-                className="p-2.5 text-left rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                <div className="flex items-center gap-1 mb-0.5">
-                  <Building2 className="w-3.5 h-3.5 text-emerald-500" />
-                  <p className="text-xs font-bold text-slate-900 dark:text-white">Sub-Admin</p>
-                </div>
-                <p className="text-[10px] text-slate-500">Addis Gourmet</p>
-              </button>
-            </div>
+          <div className="text-center pt-2 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => {
+                setIsRegisterMode(!isRegisterMode);
+                setError(null);
+              }}
+              className="text-xs text-amber-400 hover:underline"
+            >
+              {isRegisterMode
+                ? 'Already have an account? Sign in'
+                : "Don't have an account? Register"}
+            </button>
           </div>
         </Card>
-
-        {/* Mastermind Link */}
-        <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-          <Link to="/" className="hover:text-slate-900 dark:hover:text-white">
-            ← Return to Discovery
-          </Link>
-          <Link to="/mastermindlogin" className="text-amber-600 dark:text-amber-400 font-bold hover:underline flex items-center gap-1">
-            <Key className="w-3.5 h-3.5" />
-            Mastermind Clearance Portal →
-          </Link>
-        </div>
       </div>
     </div>
   );

@@ -29,12 +29,19 @@ export const CompanyHubPage: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    Promise.all([api.getCompany(id), api.getCompanyWebsite(id)])
-      .then(([compData, siteData]) => {
-        setCompany(compData.company);
-        setWebsite(siteData.website || compData.website);
+    api.getCompanyWebsite(id)
+      .then((data: any) => {
+        setCompany(data.company || data);
+        setWebsite(data.website || null);
       })
-      .catch(console.error)
+      .catch(async () => {
+        try {
+          const comp = await api.getCompany(id);
+          setCompany((comp as any).company || comp);
+        } catch (e) {
+          console.error(e);
+        }
+      })
       .finally(() => setLoading(false));
   }, [id]);
 

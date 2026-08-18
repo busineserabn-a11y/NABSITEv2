@@ -204,13 +204,13 @@ export const WebsiteStudioPage: React.FC = () => {
       let webData: any = null;
 
       try {
-        const res = await api.getCompany(id);
-        compData = res?.company || (res as any);
+        const res: any = await api.getCompany(id);
+        compData = res?.company || res;
         webData = res?.website || null;
       } catch (e) {
         try {
-          const webRes = await api.getWebsite(id);
-          webData = webRes?.website || (webRes as any);
+          const webRes: any = await api.getWebsite(id);
+          webData = webRes?.website || webRes;
           compData = webRes?.company || null;
         } catch (e2) {
           console.error('Failed to load by company or website ID', e2);
@@ -290,8 +290,8 @@ export const WebsiteStudioPage: React.FC = () => {
     if (!company) return;
     setIsSaving(true);
     try {
-      const res = await api.saveDraft(company.id, config, selectedThemeId);
-      if (res.website) setWebsite(res.website);
+      const res: any = await api.saveDraft(company.websiteId || company.id, config);
+      if (res) setWebsite(res?.website || res);
       setHasUnsavedChanges(false);
       showToast('Draft changes saved securely!', 'success');
     } catch (err: any) {
@@ -306,9 +306,9 @@ export const WebsiteStudioPage: React.FC = () => {
     if (!company) return;
     setIsPublishing(true);
     try {
-      await api.saveDraft(company.id, config, selectedThemeId);
-      const res = await api.publishWebsite(company.id);
-      if (res.website) setWebsite(res.website);
+      await api.saveDraft(company.websiteId || company.id, config);
+      const res: any = await api.publishWebsite(company.websiteId || company.id);
+      if (res) setWebsite(res?.website || res);
       setHasUnsavedChanges(false);
       showToast(`Website published successfully at /c/${company.slug}`, 'success');
     } catch (err: any) {
@@ -348,8 +348,8 @@ export const WebsiteStudioPage: React.FC = () => {
     setHasUnsavedChanges(true);
 
     try {
-      const saveRes = await api.saveDraft(company.id, finalConfig, newThemeId);
-      if (saveRes.website) setWebsite(saveRes.website);
+      const saveRes: any = await api.saveDraft(company.websiteId || company.id, finalConfig);
+      if (saveRes) setWebsite(saveRes?.website || saveRes);
       setHasUnsavedChanges(false);
       showToast(`Switched to "${targetTheme?.name || 'New Template'}"! All data preserved.`, 'success');
     } catch (err: any) {

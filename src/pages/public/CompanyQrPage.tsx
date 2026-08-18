@@ -31,11 +31,12 @@ export const CompanyQrPage: React.FC = () => {
 
         // Fetch or generate QR image
         try {
-          const qrs = await api.getQrs(res.company.id);
-          if (qrs.length > 0) {
-            const qrImage = await api.getQrImage(qrs[0].id);
-            setQrDataUrl(qrImage.dataUrl);
-          }
+          const qrImage = await api.generateQr({
+            url: `https://nabsite.et/c/${res.company.slug}`,
+            fgColor: '#0F172A',
+            bgColor: '#FFFFFF',
+          });
+          setQrDataUrl(qrImage.dataUrl);
         } catch (qrErr) {
           console.warn('QR image generation fallback', qrErr);
         }

@@ -153,33 +153,36 @@ export const OwnerCompanyDetailPage: React.FC = () => {
         api.getQrs(id).catch(() => []),
       ]);
 
-      if (compRes?.company) {
-        setCompany(compRes.company);
+      const comp: any = (compRes as any)?.company || compRes;
+      if (comp) {
+        setCompany(comp);
         setInfoForm({
-          name: compRes.company.name || '',
-          slug: compRes.company.slug || '',
-          logo: compRes.company.logo || '',
-          coverImage: compRes.company.coverImage || '',
-          category: compRes.company.category || 'General Business',
-          shortDescription: compRes.company.shortDescription || '',
-          fullDescription: compRes.company.fullDescription || '',
-          phone: compRes.company.phone || '',
-          email: compRes.company.email || '',
-          address: compRes.company.address || '',
-          mapLink: compRes.company.mapLink || '',
-          telegramUsername: compRes.company.telegramUsername || '',
-          telegramPhone: compRes.company.telegramPhone || '',
-          assignedAdminId: compRes.company.assignedAdminId || '',
-          hours: compRes.company.hours && compRes.company.hours.length > 0 ? compRes.company.hours : infoForm.hours,
+          name: comp.name || '',
+          slug: comp.slug || '',
+          logo: comp.logo || '',
+          coverImage: comp.coverImage || '',
+          category: comp.category || 'General Business',
+          shortDescription: comp.shortDescription || '',
+          fullDescription: comp.fullDescription || '',
+          phone: comp.phone || '',
+          email: comp.email || '',
+          address: comp.address || '',
+          mapLink: comp.mapLink || '',
+          telegramUsername: comp.telegramUsername || '',
+          telegramPhone: comp.telegramPhone || '',
+          assignedAdminId: comp.assignedAdminId || '',
+          hours: comp.hours && comp.hours.length > 0 ? comp.hours : infoForm.hours,
         });
 
         // Initialize QR input
-        const pubUrl = `https://nabsite.et/c/${compRes.company.slug}`;
+        const pubUrl = `https://nabsite.et/c/${comp.slug}`;
         setQrUrlInput(pubUrl);
       }
 
-      if (compRes?.website) {
-        setWebsite(compRes.website);
+      if ((compRes as any)?.website) {
+        setWebsite((compRes as any).website);
+      } else if (comp?.websiteId) {
+        api.getWebsite(comp.websiteId).then(setWebsite).catch(() => {});
       }
 
       setCategories(cats || []);
@@ -192,7 +195,7 @@ export const OwnerCompanyDetailPage: React.FC = () => {
 
       // Filter audit logs for this company
       const filteredAudits = (allAudits || []).filter(
-        (a: AuditLog) => a.companyId === id || a.resourceId === id || (compRes?.company && a.metadata?.companyId === compRes.company.id)
+        (a: AuditLog) => a.companyId === id || a.resourceId === id || (comp && a.metadata?.companyId === comp.id)
       );
       setAuditLogs(filteredAudits);
     } catch (err: any) {
@@ -221,8 +224,8 @@ export const OwnerCompanyDetailPage: React.FC = () => {
     if (!company) return;
     setActionLoading(true);
     try {
-      const res = await api.updateCompany(company.id, infoForm);
-      if (res.company) setCompany(res.company);
+      const res: any = await api.updateCompany(company.id, infoForm);
+      if (res) setCompany(res?.company || res);
       showNotification('Company information saved successfully.');
     } catch (err: any) {
       showNotification(err.message || 'Failed to save company information.', true);
@@ -235,8 +238,8 @@ export const OwnerCompanyDetailPage: React.FC = () => {
     if (!company) return;
     setActionLoading(true);
     try {
-      const res = await api.updateCompanyStatus(company.id, newStatus);
-      if (res.company) setCompany(res.company);
+      const res: any = await api.updateCompanyStatus(company.id, newStatus);
+      if (res) setCompany(res?.company || res);
       showNotification(`Company status transitioned to ${newStatus.toUpperCase()}.`);
     } catch (err: any) {
       showNotification(err.message || 'Failed to change company status.', true);
@@ -267,9 +270,9 @@ export const OwnerCompanyDetailPage: React.FC = () => {
     if (!website && !company) return;
     setActionLoading(true);
     try {
-      const targetId = website?.id || company!.id;
-      const res = await api.publishWebsite(targetId);
-      if (res.website) setWebsite(res.website);
+      const targetId = website?.id || company!.websiteId || company!.id;
+      const res: any = await api.publishWebsite(targetId);
+      if (res) setWebsite(res?.website || res);
       if (company) setCompany({ ...company, websiteStatus: 'published', status: company.status === 'draft' ? 'active' : company.status });
       showNotification('Website published successfully!');
     } catch (err: any) {
@@ -283,9 +286,9 @@ export const OwnerCompanyDetailPage: React.FC = () => {
     if (!website && !company) return;
     setActionLoading(true);
     try {
-      const targetId = website?.id || company!.id;
-      const res = await api.unpublishWebsite(targetId);
-      if (res.website) setWebsite(res.website);
+      const targetId = website?.id || company!.websiteId || company!.id;
+      const res: any = await api.unpublishWebsite(targetId);
+      if (res) setWebsite(res?.website || res);
       if (company) setCompany({ ...company, websiteStatus: 'unpublished' });
       showNotification('Website unpublished.');
     } catch (err: any) {
@@ -300,7 +303,7 @@ export const OwnerCompanyDetailPage: React.FC = () => {
     setActionLoading(true);
     try {
       const currentDraft = website?.draftConfig || (website as any)?.publishedConfig;
-      const targetId = website?.id || company!.id;
+      const targetId = website?.id || company!.websiteId || company!.id;
       const updatedDraft = {
         ...(currentDraft || {}),
         design: {
@@ -316,8 +319,8 @@ export const OwnerCompanyDetailPage: React.FC = () => {
           bodyFont: theme.typography.bodyFont,
         },
       };
-      const res = await api.saveDraft(targetId, updatedDraft, theme.id);
-      if (res.website) setWebsite(res.website);
+      const res: any = await api.saveDraft(targetId, updatedDraft);
+      if (res) setWebsite(res?.website || res);
       showNotification(`Applied archetype theme "${theme.name}" to website draft.`);
     } catch (err: any) {
       showNotification(err.message || 'Failed to apply theme.', true);
@@ -330,7 +333,7 @@ export const OwnerCompanyDetailPage: React.FC = () => {
     if (!website && !company) return;
     setActionLoading(true);
     try {
-      const targetId = website?.id || company!.id;
+      const targetId = website?.id || company!.websiteId || company!.id;
       const currentDraft = website?.draftConfig || (website as any)?.publishedConfig || {};
       const installed = Array.isArray(currentDraft.installedFeatures) ? [...currentDraft.installedFeatures] : [];
       const existingIdx = installed.findIndex((f: any) => f.featureId === featureId);
@@ -342,8 +345,8 @@ export const OwnerCompanyDetailPage: React.FC = () => {
       }
 
       const updatedDraft = { ...currentDraft, installedFeatures: installed };
-      const res = await api.saveDraft(targetId, updatedDraft, website?.themeId);
-      if (res.website) setWebsite(res.website);
+      const res: any = await api.saveDraft(targetId, updatedDraft);
+      if (res) setWebsite(res?.website || res);
       showNotification(`Feature ${enabled ? 'enabled' : 'disabled'} in website.`);
     } catch (err: any) {
       showNotification(err.message || 'Failed to update feature state.', true);

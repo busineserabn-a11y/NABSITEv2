@@ -39,7 +39,8 @@ export const CompanyProductsPage: React.FC = () => {
       ]);
       setProducts(p || []);
       setCategories(c || []);
-      if (comp?.company) setCompany(comp.company);
+      const loadedComp: any = (comp as any)?.company || comp;
+      if (loadedComp) setCompany(loadedComp);
       if (c && c.length > 0 && !form.categoryId) {
         setForm((prev) => ({ ...prev, categoryId: c[0].id }));
       }

@@ -18,10 +18,11 @@ export const CompanyProfilePage: React.FC = () => {
     if (!id) return;
     setLoading(true);
     api.getCompany(id)
-      .then((res) => {
-        if (res?.company) {
-          setCompany(res.company);
-          setHours(res.company.hours || []);
+      .then((res: any) => {
+        const comp = res?.company || res;
+        if (comp) {
+          setCompany(comp);
+          setHours(comp.hours || []);
         }
       })
       .catch(console.error)

@@ -1,0 +1,206 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Authenticated platform user with role and permissions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "fullName": { "type": "string" },
+        "role": { "type": "string", "enum": ["OWNER", "ADMIN", "SUB_ADMIN"] },
+        "assignedCompanyIds": { "type": "array" },
+        "permissions": { "type": "array" },
+        "avatarUrl": { "type": "string" },
+        "phone": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "lastLoginAt": { "type": "string" }
+      },
+      "required": ["email", "fullName", "role"]
+    },
+    "Company": {
+      "title": "Company",
+      "description": "A registered commercial business on NABSITE",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "published", "suspended", "archived"] },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "logo": { "type": "string" },
+        "coverImage": { "type": "string" },
+        "shortDescription": { "type": "string" },
+        "websiteId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "slug", "category", "status"]
+    },
+    "Website": {
+      "title": "Website",
+      "description": "Website structure and design configuration for a company",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyId": { "type": "string" },
+        "templateId": { "type": "string" },
+        "themeId": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "published"] },
+        "draftConfig": { "type": "object" },
+        "publishedConfig": { "type": "object" },
+        "version": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["companyId", "templateId", "status"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "A menu item or product offering for a company",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyId": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "string" },
+        "currency": { "type": "string" },
+        "image": { "type": "string" },
+        "isAvailable": { "type": "boolean" },
+        "isFeatured": { "type": "boolean" },
+        "tags": { "type": "array" },
+        "sortOrder": { "type": "number" }
+      },
+      "required": ["companyId", "name", "price"]
+    },
+    "ProductCategory": {
+      "title": "ProductCategory",
+      "description": "Category for digital menu or catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyId": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "sortOrder": { "type": "number" }
+      },
+      "required": ["companyId", "name"]
+    },
+    "QrConfig": {
+      "title": "QrConfig",
+      "description": "QR code stand design and target URL configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyId": { "type": "string" },
+        "targetUrl": { "type": "string" },
+        "title": { "type": "string" },
+        "caption": { "type": "string" },
+        "fgColor": { "type": "string" },
+        "bgColor": { "type": "string" },
+        "size": { "type": "number" },
+        "margin": { "type": "number" },
+        "frameStyle": { "type": "string" },
+        "scanCount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["targetUrl"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Lead application submitted from public landing CTA",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "companyName": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "category": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["fullName", "companyName", "phone"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "System mutation audit log record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "actorId": { "type": "string" },
+        "actorEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "resource": { "type": "string" },
+        "resourceId": { "type": "string" },
+        "metadata": { "type": "object" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["action", "timestamp"]
+    },
+    "AnalyticsEvent": {
+      "title": "AnalyticsEvent",
+      "description": "Telemetry event for views and interaction tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyId": { "type": "string" },
+        "websiteId": { "type": "string" },
+        "eventType": { "type": "string" },
+        "path": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "metadata": { "type": "object" }
+      },
+      "required": ["eventType", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "entity": "User",
+      "description": "User profiles indexed by UID"
+    },
+    "/companies/{companyId}": {
+      "entity": "Company",
+      "description": "Registered commercial businesses"
+    },
+    "/websites/{websiteId}": {
+      "entity": "Website",
+      "description": "Website configurations"
+    },
+    "/products/{productId}": {
+      "entity": "Product",
+      "description": "Menu items and product catalog"
+    },
+    "/productCategories/{catId}": {
+      "entity": "ProductCategory",
+      "description": "Menu categories"
+    },
+    "/qrConfigs/{qrId}": {
+      "entity": "QrConfig",
+      "description": "QR Code configurations"
+    },
+    "/leads/{leadId}": {
+      "entity": "Lead",
+      "description": "Direct commercial lead inquiries"
+    },
+    "/auditLogs/{logId}": {
+      "entity": "AuditLog",
+      "description": "Platform audit log records"
+    },
+    "/analyticsEvents/{eventId}": {
+      "entity": "AnalyticsEvent",
+      "description": "Real platform analytics telemetry"
+    },
+    "/settings/{settingDoc}": {
+      "entity": "PlatformSettings",
+      "description": "Platform settings and showcase settings"
+    }
+  }
+}

@@ -55,14 +55,15 @@ export const WebsiteWizardPage: React.FC = () => {
     if (!id) return;
     setLoading(true);
     api.getCompany(id)
-      .then((res) => {
-        if (res?.company) {
-          setCompany(res.company);
+      .then((res: any) => {
+        const comp = res?.company || res;
+        if (comp) {
+          setCompany(comp);
           // Suggest appropriate top template for the company's category
-          const categoryTemplates = getTemplatesByCategory(res.company.category);
+          const categoryTemplates = getTemplatesByCategory(comp.category);
           if (categoryTemplates && categoryTemplates.length > 0) {
             setSelectedThemeId(categoryTemplates[0].id);
-            setSelectedCategoryTab(res.company.category || 'all');
+            setSelectedCategoryTab(comp.category || 'all');
           }
         }
       })
@@ -137,7 +138,7 @@ export const WebsiteWizardPage: React.FC = () => {
         },
       };
 
-      await api.saveDraft(company.id, websitePayload.draftConfig, websitePayload.themeId);
+      await api.saveDraft(company.websiteId || company.id, websitePayload.draftConfig);
       navigate(`/studio/${company.id}`);
     } catch (err) {
       console.error(err);

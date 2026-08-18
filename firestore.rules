@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for authentication & roles
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+        : null;
+    }
+
+    function isOwner() {
+      return isSignedIn() && (
+        request.auth.token.email == 'busineser.abn@gmail.com' ||
+        (getUserData() != null && getUserData().role == 'OWNER')
+      );
+    }
+
+    function isAdmin() {
+      return isOwner() || (getUserData() != null && getUserData().role == 'ADMIN');
+    }
+
+    function isSubAdmin(companyId) {
+      return isAdmin() || (
+        getUserData() != null &&
+        getUserData().role == 'SUB_ADMIN' &&
+        companyId in getUserData().assignedCompanyIds
+      );
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create, update: if isOwner() || (isSignedIn() && request.auth.uid == userId);
+      allow delete: if isOwner();
+    }
+
+    // Companies Collection
+    match /companies/{companyId} {
+      allow read: if resource.data.status == 'published' || isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isSubAdmin(companyId);
+      allow delete: if isOwner();
+    }
+
+    // Websites Collection
+    match /websites/{websiteId} {
+      allow read: if resource.data.status == 'published' || isSignedIn();
+      allow create, update: if isAdmin() || (isSignedIn() && isSubAdmin(resource.data.companyId));
+      allow delete: if isOwner();
+    }
+
+    // Products & Menu Items
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() || (isSignedIn() && isSubAdmin(request.resource.data.companyId));
+    }
+
+    // Product Categories
+    match /productCategories/{catId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() || (isSignedIn() && isSubAdmin(request.resource.data.companyId));
+    }
+
+    // QR Configurations
+    match /qrConfigs/{qrId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() || (isSignedIn() && isSubAdmin(request.resource.data.companyId));
+    }
+
+    // Public Leads / Inquiries
+    match /leads/{leadId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Audit Logs
+    match /auditLogs/{logId} {
+      allow read: if isOwner();
+      allow create: if isSignedIn();
+      allow update, delete: if false; // Immutable audit logs
+    }
+
+    // Analytics Events
+    match /analyticsEvents/{eventId} {
+      allow create: if true;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // Platform Settings & Showcase
+    match /settings/{settingDoc} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+  }
+}
