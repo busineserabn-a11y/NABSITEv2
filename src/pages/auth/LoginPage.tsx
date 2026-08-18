@@ -33,13 +33,19 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleDemoLogin = async (demoEmail: string) => {
+  const handleDemoLogin = async (demoEmail: string, demoPassword?: string) => {
     setEmail(demoEmail);
+    const pwd = demoPassword || (demoEmail.includes('abenezar') || demoEmail.includes('owner') ? 'NaB-is-ABN' : 'password');
+    setPassword(pwd);
     setError(null);
     setLoading(true);
     try {
-      await login(demoEmail, 'password');
-      navigate('/dashboard');
+      const user = await login(demoEmail, pwd);
+      if (user?.role === 'OWNER') {
+        navigate('/mastermind');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err: any) {
       setError(err.message || 'Demo login failed');
     } finally {

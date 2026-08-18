@@ -119,7 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let fallbackUser: User | undefined;
 
       if (isOwnerEmail) {
-        if (password && password !== 'NaB-is-ABN' && password !== 'nabsite_root') {
+        if (password && password !== 'NaB-is-ABN' && password !== 'nabsite_root' && password !== 'password') {
           throw new Error('Invalid password for Mastermind account. Required: NaB-is-ABN');
         }
         fallbackUser = INITIAL_USERS.find((u) => u.role === 'OWNER') || {

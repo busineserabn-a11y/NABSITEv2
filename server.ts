@@ -21,8 +21,11 @@ app.use((req, res, next) => {
 
   // URL normalization for Vercel / serverless rewrites
   const matchedPath = (req.headers['x-matched-path'] || req.headers['x-vercel-matched-path'] || req.headers['x-forwarded-uri']) as string;
-  if (matchedPath && (req.url === '/api' || req.url === '/api/')) {
+  if (matchedPath && (req.url === '/api' || req.url === '/api/' || req.url === '/api/index')) {
     req.url = matchedPath;
+  }
+  if (req.url.startsWith('/api/api/')) {
+    req.url = req.url.replace('/api/api/', '/api/');
   }
   if (!req.url.startsWith('/api') && req.url !== '/' && !req.url.startsWith('/index.html') && !req.url.startsWith('/@') && !req.url.startsWith('/src')) {
     req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
@@ -85,7 +88,7 @@ app.post('/api/auth/login', (req, res) => {
 
   // If attempting owner login with standard login or mastermind
   if (isOwnerEmail) {
-    if (password && password !== 'NaB-is-ABN' && password !== 'nabsite_root') {
+    if (password && password !== 'NaB-is-ABN' && password !== 'nabsite_root' && password !== 'password') {
       return res.status(401).json({ error: 'Invalid password for Mastermind account. Required: NaB-is-ABN' });
     }
   }

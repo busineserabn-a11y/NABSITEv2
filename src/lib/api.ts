@@ -18,6 +18,24 @@ import {
   FeatureDefinition,
   MediaAsset,
 } from '../types';
+import {
+  INITIAL_SETTINGS,
+  INITIAL_CATEGORIES,
+  INITIAL_SHOWCASE,
+  INITIAL_COMPANIES,
+  INITIAL_WEBSITES,
+  INITIAL_PRODUCTS,
+  INITIAL_PRODUCT_CATEGORIES,
+  INITIAL_REVIEWS,
+  INITIAL_OFFERS,
+  INITIAL_ANNOUNCEMENTS,
+  INITIAL_LEADS,
+  INITIAL_QR_CONFIGS,
+  INITIAL_USERS,
+  INITIAL_AUDIT_LOGS,
+} from '../data/seed';
+import { THEME_REGISTRY } from '../data/themes';
+import { FEATURE_REGISTRY } from '../data/features';
 
 const API_BASE = '/api';
 
@@ -85,26 +103,89 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
 export const api = {
   // Public
-  getSettings: () => request<PlatformSettings>('/public/settings'),
-  getCategories: () => request<Category[]>('/public/categories'),
-  getShowcase: () => request<ShowcaseItem[]>('/public/showcase'),
-  discoverCompanies: (query?: string, category?: string) => {
-    const params = new URLSearchParams();
-    if (query) params.append('query', query);
-    if (category) params.append('category', category);
-    return request<Company[]>(`/public/discover?${params.toString()}`);
+  getSettings: async () => {
+    try {
+      return await request<PlatformSettings>('/public/settings');
+    } catch {
+      return INITIAL_SETTINGS;
+    }
   },
-  getPublicCompany: (slug: string) =>
-    request<{
-      company: Company;
-      website: Website;
-      products?: Product[];
-      productCategories?: ProductCategory[];
-      reviews?: Review[];
-      offers?: Offer[];
-      announcements?: Announcement[];
-      suspended?: boolean;
-    }>(`/public/company/${slug}`),
+  getCategories: async () => {
+    try {
+      return await request<Category[]>('/public/categories');
+    } catch {
+      return INITIAL_CATEGORIES;
+    }
+  },
+  getShowcase: async () => {
+    try {
+      return await request<ShowcaseItem[]>('/public/showcase');
+    } catch {
+      return INITIAL_SHOWCASE;
+    }
+  },
+  discoverCompanies: async (query?: string, category?: string) => {
+    try {
+      const params = new URLSearchParams();
+      if (query) params.append('query', query);
+      if (category) params.append('category', category);
+      return await request<Company[]>(`/public/discover?${params.toString()}`);
+    } catch {
+      let filtered = [...INITIAL_COMPANIES];
+      if (category && category !== 'all') {
+        filtered = filtered.filter((c) => c.category.toLowerCase() === category.toLowerCase());
+      }
+      if (query && query.trim()) {
+        const q = query.toLowerCase().trim();
+        filtered = filtered.filter(
+          (c) =>
+            c.name.toLowerCase().includes(q) ||
+            c.shortDescription?.toLowerCase().includes(q) ||
+            c.fullDescription?.toLowerCase().includes(q) ||
+            c.subcategory?.toLowerCase().includes(q)
+        );
+      }
+      return filtered;
+    }
+  },
+  getPublicCompany: async (slug: string) => {
+    try {
+      return await request<{
+        company: Company;
+        website: Website;
+        products?: Product[];
+        productCategories?: ProductCategory[];
+        reviews?: Review[];
+        offers?: Offer[];
+        announcements?: Announcement[];
+        suspended?: boolean;
+      }>(`/public/company/${slug}`);
+    } catch {
+      const comp = INITIAL_COMPANIES.find(
+        (c) => c.slug.toLowerCase() === slug.toLowerCase() || c.id === slug
+      );
+      if (!comp) {
+        throw new Error('Company not found');
+      }
+      const web = INITIAL_WEBSITES.find((w) => w.companyId === comp.id) || INITIAL_WEBSITES[0];
+      const prods = INITIAL_PRODUCTS.filter((p) => p.companyId === comp.id);
+      const prodCats = INITIAL_PRODUCT_CATEGORIES.filter((pc) => pc.companyId === comp.id);
+      const revs = INITIAL_REVIEWS.filter((r) => r.companyId === comp.id);
+      const offs = INITIAL_OFFERS.filter((o) => o.companyId === comp.id);
+      const anns = INITIAL_ANNOUNCEMENTS.filter((a) => a.companyId === comp.id);
+
+      return {
+        company: comp,
+        website: web,
+        products: prods,
+        productCategories: prodCats,
+        reviews: revs,
+        offers: offs,
+        announcements: anns,
+        suspended: comp.status === 'suspended',
+      };
+    }
+  },
   submitLead: (leadData: Partial<Lead>) =>
     request<{ success: boolean; lead: Lead }>('/public/leads', { method: 'POST', body: JSON.stringify(leadData) }),
   submitReview: (reviewData: { companyId: string; name: string; rating: number; text: string }) =>
@@ -120,8 +201,22 @@ export const api = {
   getMe: () => request<{ user: User }>('/auth/me'),
 
   // Companies
-  getCompanies: () => request<Company[]>('/companies'),
-  getCompany: (id: string) => request<{ company: Company; website: Website }>(`/companies/${id}`),
+  getCompanies: async () => {
+    try {
+      return await request<Company[]>('/companies');
+    } catch {
+      return INITIAL_COMPANIES;
+    }
+  },
+  getCompany: async (id: string) => {
+    try {
+      return await request<{ company: Company; website: Website }>(`/companies/${id}`);
+    } catch {
+      const comp = INITIAL_COMPANIES.find((c) => c.id === id || c.slug === id) || INITIAL_COMPANIES[0];
+      const web = INITIAL_WEBSITES.find((w) => w.companyId === comp.id) || INITIAL_WEBSITES[0];
+      return { company: comp, website: web };
+    }
+  },
   createCompany: (companyData: any) =>
     request<{ company: Company; website: Website; qr: QrConfig }>('/companies', {
       method: 'POST',
@@ -135,11 +230,30 @@ export const api = {
     request<{ success: boolean; message: string }>(`/companies/${id}`, { method: 'DELETE' }),
 
   // Websites & Studio
-  getWebsites: () => request<Website[]>('/websites'),
-  getWebsite: (id: string) => request<{ website: Website; company: Company }>(`/websites/${id}`),
+  getWebsites: async () => {
+    try {
+      return await request<Website[]>('/websites');
+    } catch {
+      return INITIAL_WEBSITES;
+    }
+  },
+  getWebsite: async (id: string) => {
+    try {
+      return await request<{ website: Website; company: Company }>(`/websites/${id}`);
+    } catch {
+      const web = INITIAL_WEBSITES.find((w) => w.id === id || w.companyId === id) || INITIAL_WEBSITES[0];
+      const comp = INITIAL_COMPANIES.find((c) => c.id === web.companyId) || INITIAL_COMPANIES[0];
+      return { website: web, company: comp };
+    }
+  },
   getCompanyWebsite: async (companyId: string) => {
-    const res = await request<{ company: Company; website: Website }>(`/companies/${companyId}`);
-    return res;
+    try {
+      return await request<{ company: Company; website: Website }>(`/companies/${companyId}`);
+    } catch {
+      const comp = INITIAL_COMPANIES.find((c) => c.id === companyId) || INITIAL_COMPANIES[0];
+      const web = INITIAL_WEBSITES.find((w) => w.companyId === comp.id) || INITIAL_WEBSITES[0];
+      return { company: comp, website: web };
+    }
   },
   saveDraft: (id: string, draftConfig: any, themeId?: string) =>
     request<{ success: boolean; website: Website }>(`/websites/${id}/draft`, {
@@ -155,25 +269,54 @@ export const api = {
   unpublishWebsite: (id: string) => request<{ success: boolean; website: Website }>(`/websites/${id}/unpublish`, { method: 'POST' }),
 
   // Themes & Features
-  getThemes: () => request<ThemeDefinition[]>('/themes'),
-  getFeatures: () => request<FeatureDefinition[]>('/features'),
+  getThemes: async () => {
+    try {
+      return await request<ThemeDefinition[]>('/themes');
+    } catch {
+      return THEME_REGISTRY;
+    }
+  },
+  getFeatures: async () => {
+    try {
+      return await request<FeatureDefinition[]>('/features');
+    } catch {
+      return FEATURE_REGISTRY;
+    }
+  },
 
   // Products
-  getProducts: (companyId?: string) => request<Product[]>(`/products${companyId ? `?companyId=${companyId}` : ''}`),
+  getProducts: async (companyId?: string) => {
+    try {
+      return await request<Product[]>(`/products${companyId ? `?companyId=${companyId}` : ''}`);
+    } catch {
+      return companyId ? INITIAL_PRODUCTS.filter((p) => p.companyId === companyId) : INITIAL_PRODUCTS;
+    }
+  },
   createProduct: (productData: any) => request<Product>('/products', { method: 'POST', body: JSON.stringify(productData) }),
   updateProduct: (id: string, updates: Partial<Product>) =>
     request<Product>(`/products/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   deleteProduct: (id: string) => request<{ success: boolean }>(`/products/${id}`, { method: 'DELETE' }),
 
   // Product Categories
-  getProductCategories: (companyId?: string) =>
-    request<ProductCategory[]>(`/product-categories${companyId ? `?companyId=${companyId}` : ''}`),
+  getProductCategories: async (companyId?: string) => {
+    try {
+      return await request<ProductCategory[]>(`/product-categories${companyId ? `?companyId=${companyId}` : ''}`);
+    } catch {
+      return companyId ? INITIAL_PRODUCT_CATEGORIES.filter((p) => p.companyId === companyId) : INITIAL_PRODUCT_CATEGORIES;
+    }
+  },
   createProductCategory: (data: any) =>
     request<ProductCategory>('/product-categories', { method: 'POST', body: JSON.stringify(data) }),
   deleteProductCategory: (id: string) => request<{ success: boolean }>(`/product-categories/${id}`, { method: 'DELETE' }),
 
   // Reviews
-  getReviews: (companyId?: string) => request<Review[]>(`/reviews${companyId ? `?companyId=${companyId}` : ''}`),
+  getReviews: async (companyId?: string) => {
+    try {
+      return await request<Review[]>(`/reviews${companyId ? `?companyId=${companyId}` : ''}`);
+    } catch {
+      return companyId ? INITIAL_REVIEWS.filter((r) => r.companyId === companyId) : INITIAL_REVIEWS;
+    }
+  },
   moderateReview: (id: string, status: string, reply?: string) =>
     request<{ success: boolean; review: Review }>(`/reviews/${id}/status`, {
       method: 'PUT',
@@ -181,16 +324,33 @@ export const api = {
     }),
 
   // Offers & Announcements
-  getOffers: (companyId?: string) => request<Offer[]>(`/offers${companyId ? `?companyId=${companyId}` : ''}`),
+  getOffers: async (companyId?: string) => {
+    try {
+      return await request<Offer[]>(`/offers${companyId ? `?companyId=${companyId}` : ''}`);
+    } catch {
+      return companyId ? INITIAL_OFFERS.filter((o) => o.companyId === companyId) : INITIAL_OFFERS;
+    }
+  },
   createOffer: (offerData: any) => request<Offer>('/offers', { method: 'POST', body: JSON.stringify(offerData) }),
   deleteOffer: (id: string) => request<{ success: boolean }>(`/offers/${id}`, { method: 'DELETE' }),
-  getAnnouncements: (companyId?: string) =>
-    request<Announcement[]>(`/announcements${companyId ? `?companyId=${companyId}` : ''}`),
+  getAnnouncements: async (companyId?: string) => {
+    try {
+      return await request<Announcement[]>(`/announcements${companyId ? `?companyId=${companyId}` : ''}`);
+    } catch {
+      return companyId ? INITIAL_ANNOUNCEMENTS.filter((a) => a.companyId === companyId) : INITIAL_ANNOUNCEMENTS;
+    }
+  },
   createAnnouncement: (annData: any) =>
     request<Announcement>('/announcements', { method: 'POST', body: JSON.stringify(annData) }),
 
   // Leads
-  getLeads: () => request<Lead[]>('/leads'),
+  getLeads: async () => {
+    try {
+      return await request<Lead[]>('/leads');
+    } catch {
+      return INITIAL_LEADS;
+    }
+  },
   updateLeadStatus: (id: string, status: string, notes?: any, assignedAdminId?: string) =>
     request<{ success: boolean; lead: Lead }>(`/leads/${id}/status`, {
       method: 'PUT',
@@ -200,7 +360,13 @@ export const api = {
     request<{ success: boolean; company: Company; website: Website }>(`/leads/${id}/convert`, { method: 'POST' }),
 
   // QR
-  getQrs: (companyId?: string) => request<QrConfig[]>(`/qr${companyId ? `?companyId=${companyId}` : ''}`),
+  getQrs: async (companyId?: string) => {
+    try {
+      return await request<QrConfig[]>(`/qr${companyId ? `?companyId=${companyId}` : ''}`);
+    } catch {
+      return companyId ? INITIAL_QR_CONFIGS.filter((q) => q.companyId === companyId) : INITIAL_QR_CONFIGS;
+    }
+  },
   createQr: (qrData: any) => request<QrConfig>('/qr', { method: 'POST', body: JSON.stringify(qrData) }),
   updateQr: (id: string, updates: Partial<QrConfig>) =>
     request<QrConfig>(`/qr/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
@@ -210,12 +376,24 @@ export const api = {
     request<{ dataUrl: string; normalizedUrl: string }>('/qr/generate', { method: 'POST', body: JSON.stringify(data) }),
 
   // Users & Team
-  getUsers: () => request<User[]>('/users'),
+  getUsers: async () => {
+    try {
+      return await request<User[]>('/users');
+    } catch {
+      return INITIAL_USERS;
+    }
+  },
   inviteUser: (inviteData: any) => request<any>('/invitations', { method: 'POST', body: JSON.stringify(inviteData) }),
   revokeInvitation: (id: string) => request<any>(`/invitations/${id}`, { method: 'DELETE' }),
 
   // Owner System
-  getOwnerSettings: () => request<PlatformSettings>('/owner/settings'),
+  getOwnerSettings: async () => {
+    try {
+      return await request<PlatformSettings>('/owner/settings');
+    } catch {
+      return INITIAL_SETTINGS;
+    }
+  },
   updateSettings: (updates: Partial<PlatformSettings>) =>
     request<{ success: boolean; settings: PlatformSettings }>('/owner/settings', {
       method: 'PUT',
@@ -226,7 +404,13 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(updates),
     }),
-  getAuditLogs: () => request<AuditLog[]>('/owner/audit'),
+  getAuditLogs: async () => {
+    try {
+      return await request<AuditLog[]>('/owner/audit');
+    } catch {
+      return INITIAL_AUDIT_LOGS;
+    }
+  },
   getOwnerAnalytics: () => request<any>('/owner/analytics/summary'),
   getHealth: () => request<any>('/health'),
   getOwnerExport: () => request<any>('/owner/export'),

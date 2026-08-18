@@ -49,6 +49,7 @@ import { StudioDesignEditor } from '../../components/studio/StudioDesignEditor';
 import { StudioQrPanel } from '../../components/studio/StudioQrPanel';
 import { StudioFeaturesPanel } from '../../components/studio/StudioFeaturesPanel';
 import { StudioSettingsPanel } from '../../components/studio/StudioSettingsPanel';
+import { TemplateSwitcherModal } from '../../components/studio/TemplateSwitcherModal';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 
@@ -74,6 +75,7 @@ export const WebsiteStudioPage: React.FC = () => {
   const [activePageSlug, setActivePageSlug] = useState<string>('home');
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [isTemplateSwitcherOpen, setIsTemplateSwitcherOpen] = useState(false);
 
   // Saving & Publishing State
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -314,6 +316,45 @@ export const WebsiteStudioPage: React.FC = () => {
       showToast('Failed to publish website.', 'error');
     } finally {
       setIsPublishing(false);
+    }
+  };
+
+  const handleApplyTemplate = async (newThemeId: string, updatedConfig?: WebsiteConfig) => {
+    if (!company) return;
+    setSelectedThemeId(newThemeId);
+    let finalConfig = updatedConfig || config;
+    
+    // Auto-harmonize design palette from new theme preset if needed
+    const targetTheme = THEME_REGISTRY.find((t) => t.id === newThemeId);
+    if (targetTheme && !updatedConfig) {
+      finalConfig = {
+        ...config,
+        design: {
+          ...config.design,
+          primaryColor: targetTheme.defaultPalette.primary || config.design.primaryColor,
+          secondaryColor: targetTheme.defaultPalette.secondary || config.design.secondaryColor,
+          accentColor: targetTheme.defaultPalette.accent || config.design.accentColor,
+          bgColor: targetTheme.defaultPalette.bg || config.design.bgColor,
+          surfaceColor: targetTheme.defaultPalette.surface || config.design.surfaceColor,
+          textColor: targetTheme.defaultPalette.text || config.design.textColor,
+          mutedTextColor: targetTheme.defaultPalette.muted || config.design.mutedTextColor,
+          headingFont: targetTheme.typography.headingFont || config.design.headingFont,
+          bodyFont: targetTheme.typography.bodyFont || config.design.bodyFont,
+        },
+      };
+    }
+
+    setConfig(finalConfig);
+    setHasUnsavedChanges(true);
+
+    try {
+      const saveRes = await api.saveDraft(company.id, finalConfig, newThemeId);
+      if (saveRes.website) setWebsite(saveRes.website);
+      setHasUnsavedChanges(false);
+      showToast(`Switched to "${targetTheme?.name || 'New Template'}"! All data preserved.`, 'success');
+    } catch (err: any) {
+      console.error(err);
+      showToast('Template switched locally. Click Save Draft to sync.', 'info');
     }
   };
 
@@ -563,6 +604,16 @@ export const WebsiteStudioPage: React.FC = () => {
         activePage={activePage}
         pages={pages}
         viewport={viewport}
+        currentThemeId={selectedThemeId}
+        activeTab={activeTab}
+        onTabChange={(t) => {
+          if (t === 'settings') {
+            setActiveTab('settings');
+          } else {
+            setActiveTab(t as StudioWorkspaceTab);
+          }
+        }}
+        onOpenTemplateSwitcher={() => setIsTemplateSwitcherOpen(true)}
         onViewportChange={setViewport}
         onSelectPage={(slug) => {
           setActivePageSlug(slug);
@@ -871,6 +922,24 @@ export const WebsiteStudioPage: React.FC = () => {
           />
         </div>
       </Modal>
+
+      {/* Template Switcher Modal */}
+      {isTemplateSwitcherOpen && (
+        <TemplateSwitcherModal
+          isOpen={isTemplateSwitcherOpen}
+          onClose={() => setIsTemplateSwitcherOpen(false)}
+          currentThemeId={selectedThemeId}
+          company={company}
+          website={website}
+          config={config}
+          products={products}
+          productCategories={productCategories}
+          reviews={reviews}
+          offers={offers}
+          announcements={announcements}
+          onApplyTemplate={handleApplyTemplate}
+        />
+      )}
     </div>
   );
 };

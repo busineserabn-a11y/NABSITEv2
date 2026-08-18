@@ -578,12 +578,15 @@ export interface MenuItem {
 }
 
 export interface LandingHeroSettings {
-  backgroundType: 'gradient' | 'image' | 'video' | 'animated' | 'solid';
-  bgType?: 'gradient' | 'image' | 'video' | 'animated' | 'solid' | string;
+  backgroundType: 'animated' | 'gradient' | 'image' | 'video' | 'solid' | 'custom';
+  bgType?: 'animated' | 'gradient' | 'image' | 'video' | 'solid' | 'custom' | string;
   imageUrl?: string;
   mobileImageUrl?: string;
   videoUrl?: string;
   videoFallbackImageUrl?: string;
+  videoAutoplay?: boolean;
+  videoMuted?: boolean;
+  videoLoop?: boolean;
   overlayOpacity?: number; // 0 to 100
   blur?: number; // px
   brightness?: number; // %
@@ -597,8 +600,13 @@ export interface LandingHeroSettings {
   secondaryCtaText?: string;
   secondaryCtaUrl?: string;
   heroAlignment?: 'center' | 'left';
-  motionIntensity?: 'subtle' | 'normal' | 'expressive' | 'off';
+  motionIntensity?: 'low' | 'medium' | 'high' | 'off' | 'subtle' | 'normal' | 'expressive';
   showMotionElements?: boolean;
+  enableHandAnimation?: boolean;
+  enableParticles?: boolean;
+  enableFloatingCards?: boolean;
+  enableParallax?: boolean;
+  enableGlow?: boolean;
 }
 
 export interface PlatformSettings {
@@ -615,6 +623,7 @@ export interface PlatformSettings {
   maintenanceMode: boolean;
   disablePublishing: boolean;
   disableSignups: boolean;
+  categoryDefaultTemplates?: Record<string, string>;
   searchSettings: {
     enableLocationSearch: boolean;
     enableCategoryFilters: boolean;

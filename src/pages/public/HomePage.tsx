@@ -30,6 +30,7 @@ import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
 import { CompanyName } from '../../components/ui/CompanyName';
+import { HeroMotionVisual } from '../../components/public/HeroMotionVisual';
 
 export const HomePage: React.FC = () => {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -38,10 +39,16 @@ export const HomePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [heroSettings, setHeroSettings] = useState<LandingHeroSettings>({
-    backgroundType: 'gradient',
-    bgType: 'gradient',
-    overlayOpacity: 60,
+    backgroundType: 'animated',
+    bgType: 'animated',
+    overlayOpacity: 70,
     showMotionElements: true,
+    enableHandAnimation: true,
+    enableParticles: true,
+    enableFloatingCards: true,
+    enableParallax: true,
+    enableGlow: true,
+    motionIntensity: 'medium',
   });
   const [leadForm, setLeadForm] = useState({
     fullName: '',
@@ -160,17 +167,23 @@ export const HomePage: React.FC = () => {
     return true;
   });
 
+  const isAnimatedHero =
+    heroSettings.backgroundType === 'animated' ||
+    heroSettings.bgType === 'animated' ||
+    (!heroSettings.bgType && !heroSettings.backgroundType) ||
+    (heroSettings.bgType !== 'video' && heroSettings.bgType !== 'image' && heroSettings.bgType !== 'solid');
+
   return (
     <div className="space-y-20 pb-20 overflow-hidden">
-      {/* 1. HERO SECTION WITH DYNAMIC BACKGROUND & MOTION UI */}
-      <section className="relative pt-12 pb-16 md:pt-20 md:pb-28 overflow-hidden min-h-[580px] flex items-center justify-center">
-        {/* Dynamic Background: Video, Image, or Mesh Gradient */}
+      {/* 1. HERO SECTION WITH CINEMATIC MOTION & OWNER CONTROLS */}
+      <section className="relative pt-8 pb-16 md:pt-14 md:pb-24 overflow-hidden min-h-[640px] flex flex-col items-center justify-center">
+        {/* Dynamic Background: Video, Image, Solid, or Mesh Gradient */}
         {heroSettings.bgType === 'video' && heroSettings.videoUrl ? (
           <div className="absolute inset-0 z-0 overflow-hidden">
             <video
-              autoPlay
-              loop
-              muted
+              autoPlay={heroSettings.videoAutoplay ?? true}
+              loop={heroSettings.videoLoop ?? true}
+              muted={heroSettings.videoMuted ?? true}
               playsInline
               className="w-full h-full object-cover scale-105"
             >
@@ -178,22 +191,32 @@ export const HomePage: React.FC = () => {
             </video>
             <div
               className="absolute inset-0 bg-slate-950"
-              style={{ opacity: (heroSettings.overlayOpacity ?? 60) / 100 }}
+              style={{ opacity: (heroSettings.overlayOpacity ?? 70) / 100 }}
             />
           </div>
         ) : heroSettings.bgType === 'image' && heroSettings.imageUrl ? (
           <div className="absolute inset-0 z-0 overflow-hidden">
-            <img
-              src={heroSettings.imageUrl}
-              alt="Hero Background"
-              className="w-full h-full object-cover scale-105"
-              referrerPolicy="no-referrer"
-            />
+            <picture>
+              {heroSettings.mobileImageUrl && (
+                <source media="(max-width: 640px)" srcSet={heroSettings.mobileImageUrl} />
+              )}
+              <img
+                src={heroSettings.imageUrl}
+                alt="Hero Background"
+                className="w-full h-full object-cover scale-105"
+                referrerPolicy="no-referrer"
+              />
+            </picture>
             <div
               className="absolute inset-0 bg-slate-950"
-              style={{ opacity: (heroSettings.overlayOpacity ?? 60) / 100 }}
+              style={{ opacity: (heroSettings.overlayOpacity ?? 70) / 100 }}
             />
           </div>
+        ) : heroSettings.bgType === 'solid' ? (
+          <div
+            className="absolute inset-0 z-0"
+            style={{ backgroundColor: heroSettings.solidColor || '#020617' }}
+          />
         ) : (
           /* Dynamic Mesh Gradient Background */
           <div className="absolute inset-0 z-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
@@ -204,73 +227,20 @@ export const HomePage: React.FC = () => {
           </div>
         )}
 
-        {/* FLOATING MOTION UI ELEMENTS */}
-        {heroSettings.showMotionElements && (
-          <div className="absolute inset-0 z-10 pointer-events-none max-w-7xl mx-auto hidden lg:block">
-            {/* Motion Element 1: Floating Food / Digital Menu Card (Top Left) */}
-            <div className="absolute top-12 left-6 xl:left-12 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-xl border border-amber-500/30 shadow-2xl shadow-amber-500/10 flex items-center gap-3 animate-bounce [animation-duration:6s]">
-              <div className="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold shrink-0">
-                <Sparkles className="w-5 h-5 animate-spin-slow" />
-              </div>
-              <div className="text-left pr-2">
-                <span className="text-[10px] font-mono text-amber-400 font-bold uppercase tracking-wider">
-                  ★ DIGITAL MENU
-                </span>
-                <p className="text-xs font-black text-white">Bole Prime Steak &amp; Grill</p>
-                <p className="text-[10px] text-slate-400">1,200 ETB • Instant QR View</p>
-              </div>
-            </div>
-
-            {/* Motion Element 2: Floating QR Scan Badge (Top Right) */}
-            <div className="absolute top-16 right-6 xl:right-12 p-3.5 rounded-2xl bg-slate-900/85 backdrop-blur-xl border border-emerald-500/30 shadow-2xl shadow-emerald-500/10 flex items-center gap-3 animate-bounce [animation-duration:7s] [animation-delay:1s]">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                <QrCode className="w-5 h-5" />
-              </div>
-              <div className="text-left pr-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase">
-                    LIVE TABLE STAND
-                  </span>
-                </div>
-                <p className="text-xs font-black text-white">QR Scanned · Table #04</p>
-              </div>
-            </div>
-
-            {/* Motion Element 3: 24 Theme Archetypes (Bottom Left) */}
-            <div className="absolute bottom-16 left-10 xl:left-20 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-xl border border-sky-500/30 shadow-2xl flex items-center gap-3 animate-bounce [animation-duration:8s] [animation-delay:2s]">
-              <div className="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold text-xs">
-                24
-              </div>
-              <div className="text-left pr-1">
-                <p className="text-[11px] font-black text-white">Commercial Archetypes</p>
-                <p className="text-[9px] text-slate-400">&lt; 50ms Mobile Loading</p>
-              </div>
-            </div>
-
-            {/* Motion Element 4: 100% Verified Commercials (Bottom Right) */}
-            <div className="absolute bottom-14 right-10 xl:right-20 p-3 rounded-2xl bg-slate-900/85 backdrop-blur-xl border border-amber-500/30 shadow-2xl flex items-center gap-3 animate-bounce [animation-duration:6.5s] [animation-delay:1.5s]">
-              <ShieldCheck className="w-8 h-8 text-amber-400" />
-              <div className="text-left pr-1">
-                <p className="text-[11px] font-black text-white">100% Verified Presence</p>
-                <p className="text-[9px] text-emerald-400">Authentic Ethiopian Hub</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* HERO MAIN CONTENT */}
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 relative z-20 text-center space-y-8">
+        {/* HERO MAIN CONTENT & TYPOGRAPHY */}
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 relative z-20 text-center space-y-6 pt-4">
           {/* Eyebrow badge */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/90 text-white border border-amber-500/30 text-xs font-semibold shadow-lg backdrop-blur-md">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="tracking-wide">NABSITE Commercial Digital Network • Verified Stand Directory</span>
+            <span className="tracking-wide">
+              {heroSettings.badgeText || 'NABSITE Commercial Digital Network • Verified Stand Directory'}
+            </span>
           </div>
 
           {/* Main Headline */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-[1.08] drop-shadow-md">
-              {heroSettings.title || 'The Verified Digital Home for Top Ethiopian Businesses.'}
+              {heroSettings.title || heroSettings.headline || 'The Verified Digital Home for Top Ethiopian Businesses.'}
             </h1>
             <p className="text-base sm:text-xl text-slate-200 font-normal max-w-2xl mx-auto leading-relaxed drop-shadow-sm">
               {heroSettings.subtitle ||
@@ -279,7 +249,7 @@ export const HomePage: React.FC = () => {
           </div>
 
           {/* Interactive Search Bar */}
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto pt-2">
             <form
               onSubmit={handleSearch}
               className="p-2 bg-slate-900/90 backdrop-blur-xl rounded-2xl sm:rounded-full border border-slate-700/80 shadow-2xl flex flex-col sm:flex-row items-center gap-2"
@@ -299,24 +269,40 @@ export const HomePage: React.FC = () => {
               </Button>
             </form>
           </div>
+        </div>
 
-          {/* Quick Metrics */}
-          <div className="pt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl mx-auto border-t border-slate-800/80">
-            <div className="text-center p-2 rounded-xl bg-slate-900/40 backdrop-blur-sm border border-slate-800/60">
+        {/* CINEMATIC INTERACTIVE MOTION HERO VISUAL */}
+        {isAnimatedHero && (
+          <div className="w-full max-w-7xl mx-auto px-2 relative z-10 -mt-6 sm:-mt-2">
+            <HeroMotionVisual
+              motionIntensity={(heroSettings.motionIntensity as any) || 'medium'}
+              enableHandAnimation={heroSettings.enableHandAnimation ?? true}
+              enableParticles={heroSettings.enableParticles ?? true}
+              enableFloatingCards={heroSettings.enableFloatingCards ?? true}
+              enableParallax={heroSettings.enableParallax ?? true}
+              enableGlow={heroSettings.enableGlow ?? true}
+            />
+          </div>
+        )}
+
+        {/* Quick Metrics */}
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 relative z-20 w-full pt-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl mx-auto border-t border-slate-800/80 pt-6">
+            <div className="text-center p-2 rounded-xl bg-slate-900/60 backdrop-blur-sm border border-slate-800/60">
               <p className="text-2xl font-black text-white">100%</p>
               <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Verified Live</p>
             </div>
-            <div className="text-center p-2 rounded-xl bg-slate-900/40 backdrop-blur-sm border border-slate-800/60">
-              <p className="text-2xl font-black text-white">24</p>
-              <p className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">Archetypes</p>
+            <div className="text-center p-2 rounded-xl bg-slate-900/60 backdrop-blur-sm border border-slate-800/60">
+              <p className="text-2xl font-black text-white">324</p>
+              <p className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">Bespoke Layouts</p>
             </div>
-            <div className="text-center p-2 rounded-xl bg-slate-900/40 backdrop-blur-sm border border-slate-800/60">
-              <p className="text-2xl font-black text-white">&lt; 50ms</p>
-              <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Fast Mobile</p>
+            <div className="text-center p-2 rounded-xl bg-slate-900/60 backdrop-blur-sm border border-slate-800/60">
+              <p className="text-2xl font-black text-white">&lt; 40ms</p>
+              <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">QR Mobile Stand</p>
             </div>
-            <div className="text-center p-2 rounded-xl bg-slate-900/40 backdrop-blur-sm border border-slate-800/60">
-              <p className="text-2xl font-black text-white">QR Ready</p>
-              <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Table Stands</p>
+            <div className="text-center p-2 rounded-xl bg-slate-900/60 backdrop-blur-sm border border-slate-800/60">
+              <p className="text-2xl font-black text-white">Zero</p>
+              <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Tech Setup</p>
             </div>
           </div>
         </div>
