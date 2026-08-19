@@ -191,19 +191,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const uid = cred.user.uid;
 
-      // Fetch role & status from Firestore
-      const userRef = doc(firestoreDb, 'users', uid);
-      const userSnap = await getDoc(userRef);
-
+      // Fetch role & status from Firestore with graceful offline fallback
       let userData: User;
+      try {
+        const userRef = doc(firestoreDb, 'users', uid);
+        const userSnap = await getDoc(userRef);
 
-      if (userSnap.exists()) {
-        userData = { id: uid, ...userSnap.data() } as User;
-        if (isPrimaryOwner && userData.role !== 'OWNER') {
-          userData.role = 'OWNER';
-          await updateDoc(userRef, { role: 'OWNER' });
+        if (userSnap.exists()) {
+          userData = { id: uid, ...userSnap.data() } as User;
+          if (isPrimaryOwner && userData.role !== 'OWNER') {
+            userData.role = 'OWNER';
+            await updateDoc(userRef, { role: 'OWNER' }).catch(() => {});
+          }
+        } else {
+          userData = {
+            id: uid,
+            email: cred.user.email || trimmedEmail,
+            name: isPrimaryOwner ? 'Abenezar (Mastermind)' : cred.user.displayName || email.split('@')[0],
+            role: isPrimaryOwner ? 'OWNER' : 'ADMIN',
+            assignedCompanyIds: [],
+            permissions: isPrimaryOwner ? (['all'] as any) : [],
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString(),
+          };
+          await setDoc(userRef, userData, { merge: true }).catch(() => {});
         }
-      } else {
+      } catch (firestoreErr) {
+        console.warn('Firestore offline or unreachable during login - using authenticated token credentials:', firestoreErr);
         userData = {
           id: uid,
           email: cred.user.email || trimmedEmail,
@@ -215,7 +230,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           createdAt: new Date().toISOString(),
           lastLoginAt: new Date().toISOString(),
         };
-        await setDoc(userRef, userData, { merge: true });
       }
 
       if (userData.status === 'disabled' || userData.status === 'suspended') {

@@ -9,7 +9,7 @@ import {
   sendPasswordResetEmail,
   Auth,
 } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, Firestore } from 'firebase/firestore';
 
 const metaEnv = (import.meta as any).env || {};
 
@@ -49,7 +49,17 @@ if (!getApps().length) {
 export const app: FirebaseApp = appInstance;
 export const auth: Auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-export const db: Firestore = getFirestore(app);
+
+let firestoreInstance: Firestore;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  });
+} catch {
+  firestoreInstance = getFirestore(app);
+}
+
+export const db: Firestore = firestoreInstance;
 
 export {
   signInWithEmailAndPassword,
