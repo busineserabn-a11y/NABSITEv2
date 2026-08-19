@@ -77,22 +77,23 @@ export function setAuthToken(token: string | null) {
 let isSeedingInitialized = false;
 export async function ensureFirestoreInitialized() {
   if (isSeedingInitialized) return;
-  try {
-    const settingsDoc = await getDoc(doc(firestoreDb, 'settings', 'global'));
-    if (!settingsDoc.exists()) {
-      await setDoc(doc(firestoreDb, 'settings', 'global'), INITIAL_SETTINGS);
-    }
-    isSeedingInitialized = true;
-  } catch (err) {
-    console.warn('Firestore initialization notice:', err);
-  }
+  isSeedingInitialized = true;
+  getDoc(doc(firestoreDb, 'settings', 'global'))
+    .then(async (settingsDoc) => {
+      if (!settingsDoc.exists()) {
+        await setDoc(doc(firestoreDb, 'settings', 'global'), INITIAL_SETTINGS).catch(() => {});
+      }
+    })
+    .catch((err) => {
+      console.warn('Firestore background initialization notice:', err);
+    });
 }
 
 // Real Firestore-Powered API Layer
 export const api = {
   // --- Initialization & Health ---
   init: async () => {
-    await ensureFirestoreInitialized();
+    ensureFirestoreInitialized();
   },
 
   // --- Auth / User Management ---
@@ -234,7 +235,7 @@ export const api = {
 
   // --- Companies CRUD ---
   getCompanies: async (): Promise<Company[]> => {
-    await ensureFirestoreInitialized();
+    ensureFirestoreInitialized();
     try {
       const snap = await getDocs(collection(firestoreDb, 'companies'));
       if (!snap.empty) {
@@ -247,7 +248,7 @@ export const api = {
   },
 
   discoverCompanies: async (searchQuery?: string, categoryFilter?: string): Promise<Company[]> => {
-    await ensureFirestoreInitialized();
+    ensureFirestoreInitialized();
     try {
       const snap = await getDocs(collection(firestoreDb, 'companies'));
       let list: Company[] = [];
@@ -295,7 +296,7 @@ export const api = {
   },
 
   getPublicCompany: async (slug: string): Promise<any> => {
-    await ensureFirestoreInitialized();
+    ensureFirestoreInitialized();
     try {
       let company: Company | null = null;
       const q = query(collection(firestoreDb, 'companies'), where('slug', '==', slug));

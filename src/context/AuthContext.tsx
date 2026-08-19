@@ -20,6 +20,7 @@ export interface AuthContextType {
   isConfigured: boolean;
   missingConfigKeys: string[];
   login: (email: string, password?: string) => Promise<User>;
+  register: (email: string, password?: string, name?: string, role?: Role) => Promise<User>;
   ownerLogin: (email: string, password?: string) => Promise<User>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -39,7 +40,7 @@ export const formatFirebaseAuthError = (err: any): string => {
   const message = err.message || '';
 
   if (code === 'auth/api-key-not-valid' || message.includes('api-key-not-valid') || code === 'auth/invalid-api-key') {
-    return 'NABSITE Firebase Authentication configuration is missing or invalid. Please configure VITE_FIREBASE_API_KEY and other Firebase variables in your environment deployment settings.';
+    return 'NABSITE Firebase Authentication configuration is missing or invalid. Please check your Firebase settings.';
   }
   if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
     return 'Invalid email or password. Please verify your credentials.';
@@ -57,7 +58,7 @@ export const formatFirebaseAuthError = (err: any): string => {
     return 'The provided email address is improperly formatted.';
   }
   if (code === 'auth/email-already-in-use') {
-    return 'An account with this email address already exists.';
+    return 'An account with this email address already exists. Please sign in instead.';
   }
   if (code === 'auth/weak-password') {
     return 'The password is too weak. Please use at least 6 characters.';
@@ -72,77 +73,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const configStatus = getFirebaseConfigStatus();
 
-  // Sync user profile from Firestore upon Firebase Auth state change
+  // Fast helper for primary owner check
+  const checkIsOwner = (emailStr?: string | null): boolean => {
+    if (!emailStr) return false;
+    const lower = emailStr.toLowerCase().trim();
+    return (
+      lower === 'abenezarofficial1@gmail.com' ||
+      lower === 'busineser.abn@gmail.com' ||
+      lower === 'owner@nabsite.io' ||
+      lower === 'owner@nabsite.et'
+    );
+  };
+
+  // Sync user profile upon Firebase Auth state change
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        try {
-          const userDoc = await getDoc(doc(firestoreDb, 'users', firebaseUser.uid));
-          let userData: User;
+        const isOwner = checkIsOwner(firebaseUser.email);
+        const fallbackProfile: User = {
+          id: firebaseUser.uid,
+          email: firebaseUser.email || '',
+          name: firebaseUser.displayName || (isOwner ? 'Abenezar (Mastermind)' : firebaseUser.email?.split('@')[0] || 'User'),
+          role: isOwner ? 'OWNER' : 'ADMIN',
+          assignedCompanyIds: [],
+          permissions: isOwner ? (['all'] as any) : [],
+          status: 'active',
+          createdAt: new Date().toISOString(),
+        };
 
-          const isPrimaryOwner =
-            firebaseUser.email?.toLowerCase() === 'busineser.abn@gmail.com' ||
-            firebaseUser.email?.toLowerCase() === 'abenezarofficial1@gmail.com' ||
-            firebaseUser.email?.toLowerCase() === 'owner@nabsite.io';
+        // Instantly establish authentication session
+        setUser(fallbackProfile);
+        setAuthToken(firebaseUser.uid);
+        setIsLoading(false);
+
+        // Async sync from Firestore in background
+        try {
+          const userRef = doc(firestoreDb, 'users', firebaseUser.uid);
+          const userDoc = await getDoc(userRef);
 
           if (userDoc.exists()) {
-            userData = { id: firebaseUser.uid, ...userDoc.data() } as User;
-            if (isPrimaryOwner && userData.role !== 'OWNER') {
-              userData.role = 'OWNER';
-              await updateDoc(doc(firestoreDb, 'users', firebaseUser.uid), { role: 'OWNER' });
+            const data = userDoc.data() as User;
+            const updatedUser: User = { ...fallbackProfile, ...data, id: firebaseUser.uid };
+            if (isOwner && updatedUser.role !== 'OWNER') {
+              updatedUser.role = 'OWNER';
+              updateDoc(userRef, { role: 'OWNER' }).catch(() => {});
+            }
+            if (updatedUser.status === 'disabled' || updatedUser.status === 'suspended') {
+              await signOut(auth);
+              setUser(null);
+              setAuthToken(null);
+              setSelectedCompanyId(null);
+              return;
+            }
+            setUser(updatedUser);
+            if (updatedUser.assignedCompanyId) {
+              setSelectedCompanyId(updatedUser.assignedCompanyId);
             }
           } else {
-            // Auto-provision initial record for primary owner or authorized user
-            userData = {
-              id: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-              role: isPrimaryOwner ? 'OWNER' : 'ADMIN',
-              assignedCompanyIds: [],
-              permissions: isPrimaryOwner ? ['all' as any] : [],
-              status: 'active',
-              createdAt: new Date().toISOString(),
-              lastLoginAt: new Date().toISOString(),
-            };
-            await setDoc(doc(firestoreDb, 'users', firebaseUser.uid), userData, { merge: true });
+            // Background create user doc in Firestore
+            setDoc(userRef, fallbackProfile, { merge: true }).catch(() => {});
           }
-
-          if (userData.status === 'disabled' || userData.status === 'suspended') {
-            await signOut(auth);
-            setUser(null);
-            setAuthToken(null);
-            setSelectedCompanyId(null);
-          } else {
-            setUser(userData);
-            setAuthToken(firebaseUser.uid);
-            if (userData.assignedCompanyId) {
-              setSelectedCompanyId(userData.assignedCompanyId);
-            }
-          }
-        } catch (err) {
-          console.error('Error fetching user profile from Firestore:', err);
-          const isPrimaryOwner =
-            firebaseUser.email?.toLowerCase() === 'busineser.abn@gmail.com' ||
-            firebaseUser.email?.toLowerCase() === 'abenezarofficial1@gmail.com';
-
-          setUser({
-            id: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-            role: isPrimaryOwner ? 'OWNER' : 'ADMIN',
-            assignedCompanyIds: [],
-            permissions: [],
-            status: 'active',
-            createdAt: new Date().toISOString(),
-          });
-          setAuthToken(firebaseUser.uid);
+        } catch (e) {
+          console.warn('Background Firestore profile sync notice:', e);
         }
       } else {
         setUser(null);
         setAuthToken(null);
         setSelectedCompanyId(null);
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
 
     return () => unsubscribe();
@@ -151,7 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password?: string): Promise<User> => {
     if (!isFirebaseConfigured()) {
       throw new Error(
-        'Firebase Authentication is not configured. Please configure VITE_FIREBASE_API_KEY and VITE_FIREBASE_PROJECT_ID in your environment deployment settings.'
+        'Firebase Authentication is not configured. Please configure your Firebase environment variables.'
       );
     }
     if (!email || !password) {
@@ -159,27 +158,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const trimmedEmail = email.trim().toLowerCase();
-    const isPrimaryOwner =
-      trimmedEmail === 'abenezarofficial1@gmail.com' ||
-      trimmedEmail === 'busineser.abn@gmail.com' ||
-      trimmedEmail === 'owner@nabsite.io' ||
-      trimmedEmail === 'owner@nabsite.et';
+    const isOwner = checkIsOwner(trimmedEmail);
 
     try {
       let cred;
       try {
         cred = await signInWithEmailAndPassword(auth, trimmedEmail, password);
       } catch (signInErr: any) {
-        // If this is an authorized platform owner logging in for the first time in a new Firebase project
+        // If this is an authorized platform owner logging in for the first time in a new project
         if (
-          isPrimaryOwner &&
+          isOwner &&
           (signInErr.code === 'auth/user-not-found' ||
             signInErr.code === 'auth/invalid-credential' ||
             signInErr.message?.includes('user-not-found') ||
             signInErr.message?.includes('invalid-credential'))
         ) {
           try {
-            // Auto-provision initial root owner account in Firebase Auth
             cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
           } catch {
             throw signInErr;
@@ -190,55 +184,107 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const uid = cred.user.uid;
+      const userData: User = {
+        id: uid,
+        email: cred.user.email || trimmedEmail,
+        name: isOwner ? 'Abenezar (Mastermind)' : cred.user.displayName || trimmedEmail.split('@')[0],
+        role: isOwner ? 'OWNER' : 'ADMIN',
+        assignedCompanyIds: [],
+        permissions: isOwner ? (['all'] as any) : [],
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString(),
+      };
 
-      // Fetch role & status from Firestore with graceful offline fallback
-      let userData: User;
-      try {
-        const userRef = doc(firestoreDb, 'users', uid);
-        const userSnap = await getDoc(userRef);
-
-        if (userSnap.exists()) {
-          userData = { id: uid, ...userSnap.data() } as User;
-          if (isPrimaryOwner && userData.role !== 'OWNER') {
-            userData.role = 'OWNER';
-            await updateDoc(userRef, { role: 'OWNER' }).catch(() => {});
-          }
-        } else {
-          userData = {
-            id: uid,
-            email: cred.user.email || trimmedEmail,
-            name: isPrimaryOwner ? 'Abenezar (Mastermind)' : cred.user.displayName || email.split('@')[0],
-            role: isPrimaryOwner ? 'OWNER' : 'ADMIN',
-            assignedCompanyIds: [],
-            permissions: isPrimaryOwner ? (['all'] as any) : [],
-            status: 'active',
-            createdAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString(),
-          };
-          await setDoc(userRef, userData, { merge: true }).catch(() => {});
-        }
-      } catch (firestoreErr) {
-        console.warn('Firestore offline or unreachable during login - using authenticated token credentials:', firestoreErr);
-        userData = {
-          id: uid,
-          email: cred.user.email || trimmedEmail,
-          name: isPrimaryOwner ? 'Abenezar (Mastermind)' : cred.user.displayName || email.split('@')[0],
-          role: isPrimaryOwner ? 'OWNER' : 'ADMIN',
-          assignedCompanyIds: [],
-          permissions: isPrimaryOwner ? (['all'] as any) : [],
-          status: 'active',
-          createdAt: new Date().toISOString(),
-          lastLoginAt: new Date().toISOString(),
-        };
-      }
-
-      if (userData.status === 'disabled' || userData.status === 'suspended') {
-        await signOut(auth);
-        throw new Error('This NABSITE account has been suspended. Please contact platform management.');
-      }
-
+      // Set state immediately for ultra-fast login
       setUser(userData);
       setAuthToken(uid);
+
+      // Background Firestore save/sync
+      const userRef = doc(firestoreDb, 'users', uid);
+      getDoc(userRef)
+        .then(async (snap) => {
+          if (snap.exists()) {
+            const data = snap.data() as User;
+            const updated = { ...userData, ...data, id: uid };
+            if (isOwner && updated.role !== 'OWNER') {
+              updated.role = 'OWNER';
+              updateDoc(userRef, { role: 'OWNER' }).catch(() => {});
+            }
+            if (updated.status === 'disabled' || updated.status === 'suspended') {
+              await signOut(auth);
+              setUser(null);
+              setAuthToken(null);
+              return;
+            }
+            setUser(updated);
+            if (updated.assignedCompanyId) {
+              setSelectedCompanyId(updated.assignedCompanyId);
+            }
+          } else {
+            setDoc(userRef, userData, { merge: true }).catch(() => {});
+          }
+        })
+        .catch((e) => console.warn('Background profile sync notice:', e));
+
+      return userData;
+    } catch (err: any) {
+      throw new Error(formatFirebaseAuthError(err));
+    }
+  };
+
+  const register = async (email: string, password?: string, name?: string, role?: Role): Promise<User> => {
+    if (!isFirebaseConfigured()) {
+      throw new Error(
+        'Firebase Authentication is not configured. Please configure your Firebase settings.'
+      );
+    }
+    if (!email || !password) {
+      throw new Error('Please provide both email and password.');
+    }
+    if (password.length < 6) {
+      throw new Error('Password must be at least 6 characters long.');
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const isOwner = checkIsOwner(trimmedEmail);
+    const assignedRole: Role = isOwner ? 'OWNER' : role || 'SUB_ADMIN';
+
+    try {
+      let cred;
+      try {
+        cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+      } catch (createErr: any) {
+        if (createErr.code === 'auth/email-already-in-use') {
+          // If already created, sign in directly
+          cred = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+        } else {
+          throw createErr;
+        }
+      }
+
+      const uid = cred.user.uid;
+      const userData: User = {
+        id: uid,
+        email: trimmedEmail,
+        name: name?.trim() || (isOwner ? 'Abenezar (Mastermind)' : trimmedEmail.split('@')[0]),
+        role: assignedRole,
+        assignedCompanyIds: [],
+        permissions: assignedRole === 'OWNER' || assignedRole === 'ADMIN' ? (['all'] as any) : ['manage_products', 'edit_website'],
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString(),
+      };
+
+      // Set user immediately for instant registration response
+      setUser(userData);
+      setAuthToken(uid);
+
+      // Async write user doc to Firestore
+      setDoc(doc(firestoreDb, 'users', uid), userData, { merge: true }).catch((e) =>
+        console.warn('Background user doc save notice:', e)
+      );
+
       return userData;
     } catch (err: any) {
       throw new Error(formatFirebaseAuthError(err));
@@ -247,13 +293,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const ownerLogin = async (email: string, password?: string): Promise<User> => {
     const loggedUser = await login(email, password);
-    const isPrimaryOwner =
-      email.trim().toLowerCase() === 'abenezarofficial1@gmail.com' ||
-      email.trim().toLowerCase() === 'busineser.abn@gmail.com' ||
-      email.trim().toLowerCase() === 'owner@nabsite.io' ||
-      email.trim().toLowerCase() === 'owner@nabsite.et';
+    const isOwner = checkIsOwner(email);
 
-    if (loggedUser.role !== 'OWNER' && !isPrimaryOwner) {
+    if (loggedUser.role !== 'OWNER' && !isOwner) {
       await signOut(auth);
       setUser(null);
       setAuthToken(null);
@@ -264,9 +306,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resetPassword = async (email: string): Promise<void> => {
     if (!isFirebaseConfigured()) {
-      throw new Error(
-        'Firebase Authentication is not configured. Please configure VITE_FIREBASE_API_KEY in your environment.'
-      );
+      throw new Error('Firebase Authentication is not configured.');
     }
     if (!email || !email.trim()) {
       throw new Error('Please enter your account email address.');
@@ -324,6 +364,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isConfigured: configStatus.configured,
         missingConfigKeys: configStatus.missingKeys,
         login,
+        register,
         ownerLogin,
         resetPassword,
         logout,

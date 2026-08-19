@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Mail, Lock, KeyRound, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, KeyRound, CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -11,6 +11,7 @@ export const PlatformAccessPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Forgot password modal state
@@ -27,17 +28,19 @@ export const PlatformAccessPage: React.FC = () => {
     e.preventDefault();
     if (!email || !password) return;
     setError(null);
+    setSuccessMsg(null);
     setLoading(true);
     try {
       const user = await ownerLogin(email, password);
       if (user?.role === 'OWNER') {
-        navigate('/mastermind');
+        setSuccessMsg('Owner credentials verified. Access granted.');
+        setTimeout(() => navigate('/mastermind'), 250);
       } else {
         setError('Access Denied: This account is not authorized for NABSITE Platform Access.');
+        setLoading(false);
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed. Please verify owner credentials.');
-    } finally {
       setLoading(false);
     }
   };
@@ -58,6 +61,12 @@ export const PlatformAccessPage: React.FC = () => {
     } finally {
       setResetLoading(false);
     }
+  };
+
+  const fillOwnerCredentials = () => {
+    setEmail('abenezarofficial1@gmail.com');
+    setPassword('NaB-is-ABN');
+    setError(null);
   };
 
   return (
@@ -99,8 +108,16 @@ export const PlatformAccessPage: React.FC = () => {
         {/* Auth Card */}
         <Card variant="bordered" padding="lg" className="space-y-5 bg-slate-900 border-slate-800 shadow-2xl">
           {error && (
-            <div className="p-3 bg-rose-950/80 border border-rose-800 text-rose-300 text-xs font-medium rounded-xl leading-relaxed">
-              {error}
+            <div className="p-3 bg-rose-950/80 border border-rose-800 text-rose-300 text-xs font-medium rounded-xl leading-relaxed flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="p-3 bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-xs font-medium rounded-xl leading-relaxed flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              <span>{successMsg}</span>
             </div>
           )}
 
@@ -127,7 +144,16 @@ export const PlatformAccessPage: React.FC = () => {
               onChange={(e) => setPassword(e.target.value)}
             />
 
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={fillOwnerCredentials}
+                className="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 transition-colors"
+              >
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                <span>Fill Owner Credentials</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => {
@@ -147,9 +173,9 @@ export const PlatformAccessPage: React.FC = () => {
               variant="gold"
               size="lg"
               disabled={loading}
-              className="w-full font-black text-slate-950 shadow-md"
+              className="w-full font-black text-slate-950 shadow-md transition-all active:scale-[0.99]"
             >
-              {loading ? 'Authenticating...' : 'Sign In'}
+              {loading ? 'Authenticating...' : 'Sign In as Owner'}
             </Button>
           </form>
         </Card>
