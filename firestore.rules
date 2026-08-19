@@ -28,7 +28,10 @@ service cloud.firestore {
       return isAdmin() || (
         getUserData() != null &&
         getUserData().role == 'SUB_ADMIN' &&
-        companyId in getUserData().assignedCompanyIds
+        (
+          getUserData().assignedCompanyId == companyId ||
+          (getUserData().assignedCompanyIds != null && companyId in getUserData().assignedCompanyIds)
+        )
       );
     }
 

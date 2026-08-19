@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   GoogleAuthProvider,
@@ -6,33 +6,55 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
+  Auth,
 } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, Firestore } from 'firebase/firestore';
 
 const metaEnv = (import.meta as any).env || {};
 
-const firebaseConfig = {
-  apiKey: metaEnv.VITE_FIREBASE_API_KEY || 'AIzaSyDemoDummyApiKeyForApplet12345',
-  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || 'nabsite-platform.firebaseapp.com',
-  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || 'nabsite-platform',
-  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || 'nabsite-platform.appspot.com',
-  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || '1234567890',
-  appId: metaEnv.VITE_FIREBASE_APP_ID || '1:1234567890:web:abcdef123456',
+export const firebaseConfig = {
+  apiKey: metaEnv.VITE_FIREBASE_API_KEY || "AIzaSyDroAUS_-acMmG9JVMp25hTbzqf1KO7RAU",
+  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || "nabsite-master-specification.firebaseapp.com",
+  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || "nabsite-master-specification",
+  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || "nabsite-master-specification.firebasestorage.app",
+  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || "692759105114",
+  appId: metaEnv.VITE_FIREBASE_APP_ID || "1:692759105114:web:9f9aee4b7c790100ac9263",
+  measurementId: metaEnv.VITE_FIREBASE_MEASUREMENT_ID || "G-B8VDV8SRWP",
 };
 
-// Initialize Firebase App safely
-export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+export const getFirebaseConfigStatus = () => {
+  const missing: string[] = [];
+  if (!firebaseConfig.apiKey) missing.push('VITE_FIREBASE_API_KEY');
+  if (!firebaseConfig.projectId) missing.push('VITE_FIREBASE_PROJECT_ID');
+  if (!firebaseConfig.appId) missing.push('VITE_FIREBASE_APP_ID');
+  return {
+    configured: missing.length === 0,
+    missingKeys: missing,
+  };
+};
 
-// Initialize Auth
-export const auth = getAuth(app);
+export const isFirebaseConfigured = (): boolean => {
+  return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
+};
+
+// Safe initialization
+let appInstance: FirebaseApp;
+if (!getApps().length) {
+  appInstance = initializeApp(firebaseConfig);
+} else {
+  appInstance = getApp();
+}
+
+export const app: FirebaseApp = appInstance;
+export const auth: Auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-
-// Initialize Firestore
-export const db = getFirestore(app);
+export const db: Firestore = getFirestore(app);
 
 export {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
 };

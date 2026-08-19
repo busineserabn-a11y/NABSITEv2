@@ -123,6 +123,77 @@ export const api = {
     return [];
   },
 
+  createUser: async (userData: Partial<User>): Promise<User> => {
+    const userId = userData.id || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const nowIso = new Date().toISOString();
+    const newUser: User = {
+      id: userId,
+      email: (userData.email || '').trim().toLowerCase(),
+      name: userData.name || 'Staff User',
+      role: userData.role || 'SUB_ADMIN',
+      status: userData.status || 'active',
+      assignedCompanyId: userData.assignedCompanyId || '',
+      assignedCompanyIds: userData.assignedCompanyIds || (userData.assignedCompanyId ? [userData.assignedCompanyId] : []),
+      permissions: userData.permissions || [],
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      await setDoc(doc(firestoreDb, 'users', userId), newUser, { merge: true });
+      // Log audit
+      await addDoc(collection(firestoreDb, 'auditLogs'), {
+        userId: 'admin',
+        userName: 'Admin/Owner',
+        userRole: 'OWNER',
+        action: 'CREATE',
+        entityType: 'USER',
+        entityId: userId,
+        targetName: newUser.name,
+        details: `Created user account with role ${newUser.role}`,
+        timestamp: nowIso,
+      });
+    } catch (err) {
+      console.error('Firestore createUser failed:', err);
+      throw new ApiError(500, 'Failed to save user account');
+    }
+    return newUser;
+  },
+
+  updateUser: async (id: string, userData: Partial<User>): Promise<User> => {
+    try {
+      const userRef = doc(firestoreDb, 'users', id);
+      const updateData = {
+        ...userData,
+        updatedAt: new Date().toISOString(),
+      };
+      await setDoc(userRef, updateData, { merge: true });
+      const snap = await getDoc(userRef);
+      return { id: snap.id, ...snap.data() } as User;
+    } catch (err) {
+      console.error('Firestore updateUser failed:', err);
+      throw new ApiError(500, 'Failed to update user account');
+    }
+  },
+
+  suspendUser: async (id: string): Promise<User> => {
+    return api.updateUser(id, { status: 'suspended' });
+  },
+
+  activateUser: async (id: string): Promise<User> => {
+    return api.updateUser(id, { status: 'active' });
+  },
+
+  deleteUser: async (id: string): Promise<{ success: boolean }> => {
+    try {
+      await deleteDoc(doc(firestoreDb, 'users', id));
+      return { success: true };
+    } catch (err) {
+      console.error('Firestore deleteUser failed:', err);
+      throw new ApiError(500, 'Failed to delete user account');
+    }
+  },
+
   getOwnerAnalytics: async () => {
     try {
       const [comps, webs, lds, events] = await Promise.all([

@@ -51,8 +51,9 @@ export interface User {
   assignedCompanyId?: string; // For SUB_ADMIN
   assignedCompanyIds?: string[]; // For ADMIN
   permissions?: SubAdminPermission[];
-  status: 'active' | 'disabled' | 'pending';
+  status: 'active' | 'disabled' | 'pending' | 'suspended';
   createdAt: string;
+  updatedAt?: string;
   lastLoginAt?: string;
 }
 

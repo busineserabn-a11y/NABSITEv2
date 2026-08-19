@@ -1,48 +1,42 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ShieldCheck, AlertTriangle, KeyRound, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, KeyRound, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
 import { Modal } from '../../components/ui/Modal';
 
-export const LoginPage: React.FC = () => {
+export const PlatformAccessPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Forgot Password modal state
+  // Forgot password modal state
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSuccess, setResetSuccess] = useState<string | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
-  const { login, resetPassword, isConfigured, missingConfigKeys } = useAuth();
+  const { ownerLogin, resetPassword, isConfigured, missingConfigKeys } = useAuth();
   const navigate = useNavigate();
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
     setError(null);
     setLoading(true);
     try {
-      const loggedUser = await login(email, password);
-
-      // Route by role
-      if (loggedUser.role === 'OWNER') {
+      const user = await ownerLogin(email, password);
+      if (user?.role === 'OWNER') {
         navigate('/mastermind');
-      } else if (loggedUser.role === 'ADMIN') {
-        navigate('/admin');
-      } else if (loggedUser.role === 'SUB_ADMIN') {
-        navigate(`/company/${loggedUser.assignedCompanyId || ''}`);
       } else {
-        navigate('/');
+        setError('Access Denied: This account is not authorized for NABSITE Platform Access.');
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication failed. Please check your credentials.');
+      setError(err.message || 'Authentication failed. Please verify owner credentials.');
     } finally {
       setLoading(false);
     }
@@ -57,32 +51,39 @@ export const LoginPage: React.FC = () => {
     try {
       await resetPassword(resetEmail);
       setResetSuccess(
-        `A password reset link has been dispatched to ${resetEmail}. Please check your inbox and follow the instructions.`
+        `A password recovery link has been dispatched to ${resetEmail}. Follow the instructions in your email.`
       );
     } catch (err: any) {
-      setResetError(err.message || 'Failed to send password reset email.');
+      setResetError(err.message || 'Failed to send recovery link.');
     } finally {
       setResetLoading(false);
     }
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-extrabold text-2xl mx-auto shadow-md">
-            N
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 selection:bg-amber-500 selection:text-slate-950 font-sans relative overflow-hidden">
+      {/* Background visual accents */}
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="w-full max-w-md space-y-6 relative z-10">
+        {/* Mastermind Header */}
+        <div className="text-center space-y-3">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-2xl mx-auto shadow-xl">
+            <ShieldCheck className="w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            Sign in to NABSITE
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
-            Authorized portal access for platform administrators and company managers.
-          </p>
+
+          <div className="space-y-1">
+            <h1 className="text-2xl font-black tracking-tight text-white uppercase">
+              NABSITE Platform Access
+            </h1>
+            <p className="text-xs text-slate-400 max-w-xs mx-auto">
+              Secure authentication for verified platform management.
+            </p>
+          </div>
         </div>
 
-        {/* Configuration Notice for Environment Setup */}
+        {/* Configuration Notice */}
         {!isConfigured && (
           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs space-y-2">
             <div className="flex items-center gap-2 font-bold text-amber-400">
@@ -90,30 +91,26 @@ export const LoginPage: React.FC = () => {
               <span>Firebase Environment Required</span>
             </div>
             <p className="text-amber-200/80 leading-relaxed">
-              Firebase credentials are not detected in environment variables. Please add{' '}
-              <code className="px-1.5 py-0.5 rounded bg-slate-900 font-mono text-[11px] text-amber-300">
-                {missingConfigKeys.join(', ') || 'VITE_FIREBASE_API_KEY'}
-              </code>{' '}
-              in your Vercel or environment deployment settings.
+              Missing Firebase configuration variables: {missingConfigKeys.join(', ')}. Please configure them in your environment settings.
             </p>
           </div>
         )}
 
-        {/* Login Card */}
-        <Card variant="bordered" padding="lg" className="space-y-6 shadow-xl bg-slate-900 border-slate-800">
+        {/* Auth Card */}
+        <Card variant="bordered" padding="lg" className="space-y-5 bg-slate-900 border-slate-800 shadow-2xl">
           {error && (
             <div className="p-3 bg-rose-950/80 border border-rose-800 text-rose-300 text-xs font-medium rounded-xl leading-relaxed">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
+          <form onSubmit={handleAuth} className="space-y-4">
             <Input
-              label="Staff Email"
+              label="Email"
               type="email"
               required
               autoComplete="email"
-              placeholder="e.g. name@company.et"
+              placeholder="owner@domain.com"
               icon={Mail}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -150,7 +147,7 @@ export const LoginPage: React.FC = () => {
               variant="gold"
               size="lg"
               disabled={loading}
-              className="w-full font-bold text-slate-950 shadow-md"
+              className="w-full font-black text-slate-950 shadow-md"
             >
               {loading ? 'Authenticating...' : 'Sign In'}
             </Button>
@@ -162,19 +159,19 @@ export const LoginPage: React.FC = () => {
       <Modal
         isOpen={forgotModalOpen}
         onClose={() => setForgotModalOpen(false)}
-        title="Reset Password"
+        title="Owner Password Recovery"
         size="sm"
       >
         <div className="space-y-4 pt-1">
           <p className="text-xs text-slate-400">
-            Enter your registered NABSITE account email address. We will send a secure password reset link directly to your inbox.
+            Enter your platform owner email address. A secure recovery link will be sent to reset your password.
           </p>
 
           {resetSuccess ? (
             <div className="p-4 bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs rounded-xl space-y-2">
               <div className="flex items-center gap-2 font-bold">
                 <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                <span>Reset Email Sent</span>
+                <span>Recovery Link Sent</span>
               </div>
               <p>{resetSuccess}</p>
               <div className="pt-2">
@@ -192,10 +189,10 @@ export const LoginPage: React.FC = () => {
               )}
 
               <Input
-                label="Registered Email"
+                label="Owner Email"
                 type="email"
                 required
-                placeholder="e.g. staff@company.et"
+                placeholder="owner@domain.com"
                 icon={Mail}
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
@@ -218,7 +215,7 @@ export const LoginPage: React.FC = () => {
                   disabled={resetLoading || !resetEmail}
                   icon={KeyRound}
                 >
-                  {resetLoading ? 'Sending...' : 'Send Reset Link'}
+                  {resetLoading ? 'Sending...' : 'Send Recovery Link'}
                 </Button>
               </div>
             </form>

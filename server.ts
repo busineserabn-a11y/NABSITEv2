@@ -72,60 +72,21 @@ function requireRole(allowedRoles: Role[]) {
 // 1. AUTHENTICATION ENDPOINTS
 // ==========================================
 
-// Standard Login (Owner / Admin / Sub-Admin)
+// Standard verification endpoint (Client utilizes Firebase SDK directly)
 app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
+  const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email is required' });
   }
 
   const inputEmail = email.toLowerCase().trim();
-  const isOwnerEmail =
-    inputEmail === 'abenezarofficial1@gmail.com' ||
-    inputEmail === 'owner@nabsite.io' ||
-    inputEmail === 'owner@nabsite.et' ||
-    inputEmail === 'owner';
-
-  // If attempting owner login with standard login or mastermind
-  if (isOwnerEmail) {
-    if (password && password !== 'NaB-is-ABN' && password !== 'nabsite_root' && password !== 'password') {
-      return res.status(401).json({ error: 'Invalid password for Mastermind account. Required: NaB-is-ABN' });
-    }
-  }
-
-  let user = db.users.find((u) => {
-    const userEmail = u.email.toLowerCase();
-    return (
-      userEmail === inputEmail ||
-      (isOwnerEmail && u.role === 'OWNER') ||
-      (inputEmail === 'admin@nabsite.et' && u.role === 'ADMIN') ||
-      (inputEmail === 'admin@nabsite.io' && u.role === 'ADMIN') ||
-      (inputEmail === 'admin' && u.role === 'ADMIN') ||
-      (inputEmail === 'dawit@addisgourmet.et' && userEmail === 'manager@addisgourmet.com') ||
-      (inputEmail === 'manager@addisgourmet.com' && userEmail === 'manager@addisgourmet.com') ||
-      (inputEmail === 'manager' && userEmail === 'manager@addisgourmet.com')
-    );
-  });
-
-  if (!user && isOwnerEmail) {
-    user = {
-      id: 'user_owner',
-      email: 'abenezarofficial1@gmail.com',
-      name: 'Abenezar (Mastermind)',
-      role: 'OWNER',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=128&auto=format&fit=crop&q=80',
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      lastLoginAt: new Date().toISOString(),
-    };
-    db.users.push(user);
-  }
+  const user = db.users.find((u) => u.email.toLowerCase() === inputEmail);
 
   if (!user) {
-    return res.status(401).json({ error: 'Invalid credentials. Please verify your email.' });
+    return res.status(401).json({ error: 'Account not found. Please contact platform administration.' });
   }
 
-  if (user.status === 'disabled') {
+  if (user.status === 'disabled' || user.status === 'suspended') {
     return res.status(403).json({ error: 'Account has been disabled by platform administration' });
   }
 
@@ -147,25 +108,26 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
-// Hidden Owner Gateway Login (/mastermindlogin)
+// Platform Owner Verification Endpoint
 app.post('/api/auth/owner-login', (req, res) => {
-  const { key, email } = req.body;
-  const inputKey = key ? key.trim() : '';
-  const inputEmail = email ? email.toLowerCase().trim() : '';
+  const { email } = req.body;
+  const inputEmail = (email || '').toLowerCase().trim();
 
-  // Validate credentials if provided
-  if (inputKey && inputKey !== 'NaB-is-ABN' && inputKey !== 'nabsite_root' && inputKey !== 'password') {
-    return res.status(401).json({ error: 'Invalid Mastermind clearance key. Required: NaB-is-ABN' });
+  const isOwner =
+    inputEmail === 'busineser.abn@gmail.com' ||
+    inputEmail === 'abenezarofficial1@gmail.com' ||
+    inputEmail === 'owner@nabsite.io';
+
+  if (!isOwner) {
+    return res.status(403).json({ error: 'Access Denied: This account does not have NABSITE Platform Access authority.' });
   }
 
-  // Look for owner account
-  let owner = db.users.find((u) => u.role === 'OWNER' || u.email === 'abenezarofficial1@gmail.com');
+  let owner = db.users.find((u) => u.role === 'OWNER' || u.email.toLowerCase() === inputEmail);
   if (!owner) {
-    // If not found, provision default owner
     owner = {
       id: 'user_owner',
-      email: 'abenezarofficial1@gmail.com',
-      name: 'Abenezar (Mastermind)',
+      email: inputEmail || 'busineser.abn@gmail.com',
+      name: 'NABSITE Owner',
       role: 'OWNER',
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=128&auto=format&fit=crop&q=80',
       status: 'active',
@@ -173,13 +135,10 @@ app.post('/api/auth/owner-login', (req, res) => {
       lastLoginAt: new Date().toISOString(),
     };
     db.users.push(owner);
-  } else {
-    owner.email = 'abenezarofficial1@gmail.com';
-    owner.name = 'Abenezar (Mastermind)';
   }
 
   owner.lastLoginAt = new Date().toISOString();
-  db.log(owner.id, owner.name, 'OWNER', 'OWNER_COMMAND_ACCESS', 'PLATFORM', 'mastermind_gateway', undefined, 'SUCCESS');
+  db.log(owner.id, owner.name, 'OWNER', 'OWNER_COMMAND_ACCESS', 'PLATFORM', 'platform_access', undefined, 'SUCCESS');
 
   return res.json({
     user: {
