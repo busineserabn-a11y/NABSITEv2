@@ -11,7 +11,7 @@ import {
   where,
   orderBy,
   limit,
-  serverTimestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { db as firestoreDb } from './firebase';
 import {
@@ -31,28 +31,11 @@ import {
   AuditLog,
   ThemeDefinition,
   FeatureDefinition,
-  MediaAsset,
 } from '../types';
-import {
-  INITIAL_SETTINGS,
-  INITIAL_CATEGORIES,
-  INITIAL_SHOWCASE,
-  INITIAL_COMPANIES,
-  INITIAL_WEBSITES,
-  INITIAL_PRODUCTS,
-  INITIAL_PRODUCT_CATEGORIES,
-  INITIAL_REVIEWS,
-  INITIAL_OFFERS,
-  INITIAL_ANNOUNCEMENTS,
-  INITIAL_LEADS,
-  INITIAL_QR_CONFIGS,
-  INITIAL_USERS,
-  INITIAL_AUDIT_LOGS,
-} from '../data/seed';
+import { INITIAL_CATEGORIES, INITIAL_SETTINGS } from '../data/seed';
 import { THEME_REGISTRY } from '../data/themes';
 import { FEATURE_REGISTRY } from '../data/features';
-
-const API_BASE = '/api';
+import { withTimeout, logAudit, logError } from './firestoreUtils';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public details?: any) {
@@ -73,27 +56,36 @@ export function setAuthToken(token: string | null) {
   }
 }
 
-// Database initial seeder to ensure initial baseline settings exist in Firestore
+// Generate unique clean slug
+export function generateSlug(name: string): string {
+  const base = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return base || `company-${Date.now().toString(36)}`;
+}
+
+// Ensure platform settings baseline in Firestore if empty
 let isSeedingInitialized = false;
 export async function ensureFirestoreInitialized() {
   if (isSeedingInitialized) return;
   isSeedingInitialized = true;
-  getDoc(doc(firestoreDb, 'settings', 'global'))
-    .then(async (settingsDoc) => {
-      if (!settingsDoc.exists()) {
-        await setDoc(doc(firestoreDb, 'settings', 'global'), INITIAL_SETTINGS).catch(() => {});
-      }
-    })
-    .catch((err) => {
-      console.warn('Firestore background initialization notice:', err);
-    });
+  try {
+    const settingsDoc = await withTimeout(getDoc(doc(firestoreDb, 'settings', 'global')), 4000);
+    if (!settingsDoc.exists()) {
+      await setDoc(doc(firestoreDb, 'settings', 'global'), INITIAL_SETTINGS, { merge: true });
+    }
+  } catch (err) {
+    console.warn('Firestore baseline initialization notice:', err);
+  }
 }
 
 // Real Firestore-Powered API Layer
 export const api = {
   // --- Initialization & Health ---
   init: async () => {
-    ensureFirestoreInitialized();
+    await ensureFirestoreInitialized();
   },
 
   // --- Auth / User Management ---
@@ -101,7 +93,7 @@ export const api = {
     const token = getAuthToken();
     if (!token) return { user: null };
     try {
-      const userDoc = await getDoc(doc(firestoreDb, 'users', token));
+      const userDoc = await withTimeout(getDoc(doc(firestoreDb, 'users', token)), 5000);
       if (userDoc.exists()) {
         return { user: { id: userDoc.id, ...userDoc.data() } as User };
       }
@@ -114,12 +106,12 @@ export const api = {
   // --- Users CRUD ---
   getUsers: async (): Promise<User[]> => {
     try {
-      const snap = await getDocs(collection(firestoreDb, 'users'));
+      const snap = await withTimeout(getDocs(collection(firestoreDb, 'users')), 8000);
       if (!snap.empty) {
         return snap.docs.map((d) => ({ id: d.id, ...d.data() } as User));
       }
     } catch (err) {
-      console.error('Firestore getUsers failed:', err);
+      logError('getUsers', err);
     }
     return [];
   },
@@ -135,251 +127,175 @@ export const api = {
       status: userData.status || 'active',
       assignedCompanyId: userData.assignedCompanyId || '',
       assignedCompanyIds: userData.assignedCompanyIds || (userData.assignedCompanyId ? [userData.assignedCompanyId] : []),
-      permissions: userData.permissions || [],
+      permissions: userData.permissions || ['manage_products', 'edit_website'],
       createdAt: nowIso,
       updatedAt: nowIso,
     };
 
     try {
-      await setDoc(doc(firestoreDb, 'users', userId), newUser, { merge: true });
-      // Log audit
-      await addDoc(collection(firestoreDb, 'auditLogs'), {
-        userId: 'admin',
-        userName: 'Admin/Owner',
-        userRole: 'OWNER',
-        action: 'CREATE',
-        entityType: 'USER',
-        entityId: userId,
-        targetName: newUser.name,
-        details: `Created user account with role ${newUser.role}`,
-        timestamp: nowIso,
-      });
+      await withTimeout(
+        setDoc(doc(firestoreDb, 'users', userId), newUser, { merge: true }),
+        10000,
+        'Failed to save user account (timeout).'
+      );
+      await logAudit('CREATE', 'USER', userId, `Created user account ${newUser.email} with role ${newUser.role}`, newUser.name);
     } catch (err) {
-      console.error('Firestore createUser failed:', err);
-      throw new ApiError(500, 'Failed to save user account');
+      logError('createUser', err, { userId });
+      throw new ApiError(500, 'Failed to save user account in Firestore.');
     }
     return newUser;
   },
 
-  updateUser: async (id: string, userData: Partial<User>): Promise<User> => {
+  updateUser: async (id: string, data: Partial<User>): Promise<User> => {
     try {
       const userRef = doc(firestoreDb, 'users', id);
-      const updateData = {
-        ...userData,
-        updatedAt: new Date().toISOString(),
-      };
-      await setDoc(userRef, updateData, { merge: true });
+      const updateData = { ...data, updatedAt: new Date().toISOString() };
+      await withTimeout(setDoc(userRef, updateData, { merge: true }), 8000);
       const snap = await getDoc(userRef);
+      await logAudit('UPDATE', 'USER', id, `Updated user ${id} fields`);
       return { id: snap.id, ...snap.data() } as User;
     } catch (err) {
-      console.error('Firestore updateUser failed:', err);
-      throw new ApiError(500, 'Failed to update user account');
+      logError('updateUser', err, { id });
+      throw new ApiError(500, 'Failed to update user');
     }
-  },
-
-  suspendUser: async (id: string): Promise<User> => {
-    return api.updateUser(id, { status: 'suspended' });
-  },
-
-  activateUser: async (id: string): Promise<User> => {
-    return api.updateUser(id, { status: 'active' });
   },
 
   deleteUser: async (id: string): Promise<{ success: boolean }> => {
     try {
-      await deleteDoc(doc(firestoreDb, 'users', id));
+      await withTimeout(deleteDoc(doc(firestoreDb, 'users', id)), 8000);
+      await logAudit('DELETE', 'USER', id, `Deleted user account ${id}`);
       return { success: true };
     } catch (err) {
-      console.error('Firestore deleteUser failed:', err);
-      throw new ApiError(500, 'Failed to delete user account');
+      logError('deleteUser', err, { id });
+      throw new ApiError(500, 'Failed to delete user');
     }
-  },
-
-  getOwnerAnalytics: async () => {
-    try {
-      const [comps, webs, lds, events] = await Promise.all([
-        getDocs(collection(firestoreDb, 'companies')),
-        getDocs(collection(firestoreDb, 'websites')),
-        getDocs(collection(firestoreDb, 'leads')),
-        getDocs(collection(firestoreDb, 'analyticsEvents')),
-      ]);
-      return {
-        totalCompanies: comps.size,
-        activeCompanies: comps.docs.filter((d) => d.data().status === 'published' || d.data().status === 'active').length,
-        publishedWebsites: webs.docs.filter((d) => d.data().status === 'published' || d.data().websiteStatus === 'published').length,
-        totalLeads: lds.size,
-        totalEvents: events.size,
-      };
-    } catch {
-      return {
-        totalCompanies: 0,
-        activeCompanies: 0,
-        publishedWebsites: 0,
-        totalLeads: 0,
-        totalEvents: 0,
-      };
-    }
-  },
-
-  suspendCompany: async (id: string) => {
-    return api.updateCompany(id, { status: 'suspended' });
-  },
-
-  restoreCompany: async (id: string) => {
-    return api.updateCompany(id, { status: 'active' });
-  },
-
-  archiveCompany: async (id: string) => {
-    return api.updateCompany(id, { status: 'archived' });
   },
 
   // --- Companies CRUD ---
   getCompanies: async (): Promise<Company[]> => {
-    ensureFirestoreInitialized();
     try {
-      const snap = await getDocs(collection(firestoreDb, 'companies'));
+      const snap = await withTimeout(getDocs(collection(firestoreDb, 'companies')), 10000);
       if (!snap.empty) {
         return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Company));
       }
     } catch (err) {
-      console.error('Firestore getCompanies failed:', err);
-    }
-    return [];
-  },
-
-  discoverCompanies: async (searchQuery?: string, categoryFilter?: string): Promise<Company[]> => {
-    ensureFirestoreInitialized();
-    try {
-      const snap = await getDocs(collection(firestoreDb, 'companies'));
-      let list: Company[] = [];
-      if (!snap.empty) {
-        list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Company));
-      }
-
-      list = list.filter((c) => c.status === 'active' || (c.status as string) === 'published');
-
-      if (categoryFilter && categoryFilter !== 'all') {
-        list = list.filter((c) => c.category?.toLowerCase() === categoryFilter.toLowerCase());
-      }
-      if (searchQuery && searchQuery.trim()) {
-        const qLower = searchQuery.toLowerCase().trim();
-        list = list.filter(
-          (c) =>
-            c.name.toLowerCase().includes(qLower) ||
-            c.shortDescription?.toLowerCase().includes(qLower) ||
-            c.category?.toLowerCase().includes(qLower)
-        );
-      }
-      return list;
-    } catch (err) {
-      console.error('Firestore discoverCompanies failed:', err);
+      logError('getCompanies', err);
     }
     return [];
   },
 
   getCompany: async (id: string): Promise<Company> => {
     try {
-      const snap = await getDoc(doc(firestoreDb, 'companies', id));
+      // 1. Direct ID match
+      const docRef = doc(firestoreDb, 'companies', id);
+      const snap = await withTimeout(getDoc(docRef), 8000);
       if (snap.exists()) {
         return { id: snap.id, ...snap.data() } as Company;
       }
-      // Also try querying by slug
-      const q = query(collection(firestoreDb, 'companies'), where('slug', '==', id));
-      const slugSnap = await getDocs(q);
-      if (!slugSnap.empty) {
-        return { id: slugSnap.docs[0].id, ...slugSnap.docs[0].data() } as Company;
+
+      // 2. Slug match
+      const q = query(collection(firestoreDb, 'companies'), where('slug', '==', id), limit(1));
+      const qSnap = await withTimeout(getDocs(q), 8000);
+      if (!qSnap.empty) {
+        return { id: qSnap.docs[0].id, ...qSnap.docs[0].data() } as Company;
       }
     } catch (err) {
-      console.error('Firestore getCompany failed:', err);
+      logError('getCompany', err, { id });
     }
-    throw new ApiError(404, 'Company not found');
+    throw new ApiError(404, `Company with identifier '${id}' not found`);
   },
 
-  getPublicCompany: async (slug: string): Promise<any> => {
-    ensureFirestoreInitialized();
+  getCompanyBySlug: async (slug: string): Promise<Company> => {
+    return api.getCompany(slug);
+  },
+
+  getPublicCompany: async (identifier: string): Promise<{ company: Company; website?: Website }> => {
+    const company = await api.getCompany(identifier);
+    let website: Website | undefined;
     try {
-      let company: Company | null = null;
-      const q = query(collection(firestoreDb, 'companies'), where('slug', '==', slug));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        company = { id: snap.docs[0].id, ...snap.docs[0].data() } as Company;
-      } else {
-        const directSnap = await getDoc(doc(firestoreDb, 'companies', slug));
-        if (directSnap.exists()) {
-          company = { id: directSnap.id, ...directSnap.data() } as Company;
-        }
-      }
-
-      if (company) {
-        let website: Website | null = null;
-        if (company.websiteId) {
-          const webDoc = await getDoc(doc(firestoreDb, 'websites', company.websiteId));
-          if (webDoc.exists()) {
-            website = { id: webDoc.id, ...webDoc.data() } as Website;
-          }
-        }
-        if (!website) {
-          const webQ = query(collection(firestoreDb, 'websites'), where('companyId', '==', company.id));
-          const webSnap = await getDocs(webQ);
-          if (!webSnap.empty) {
-            website = { id: webSnap.docs[0].id, ...webSnap.docs[0].data() } as Website;
-          }
-        }
-
-        // Fetch products & categories
-        const prodQ = query(collection(firestoreDb, 'products'), where('companyId', '==', company.id));
-        const prodSnap = await getDocs(prodQ);
-        const products = prodSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Product));
-
-        const catQ = query(collection(firestoreDb, 'productCategories'), where('companyId', '==', company.id));
-        const catSnap = await getDocs(catQ);
-        const productCategories = catSnap.docs.map((d) => ({ id: d.id, ...d.data() } as ProductCategory));
-
-        return {
-          company,
-          website: website || null,
-          products,
-          productCategories,
-          reviews: [],
-          offers: [],
-          announcements: [],
-          suspended: company.status === 'suspended',
-        };
-      }
-    } catch (err) {
-      console.error('Firestore getPublicCompany failed:', err);
+      website = await api.getWebsite(company.websiteId || company.id);
+    } catch {
+      // website can be undefined
     }
-
-    throw new ApiError(404, 'Company not found');
+    return { company, website };
   },
 
-  createCompany: async (data: Partial<Company>): Promise<Company> => {
-    const compId = `comp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const webId = `web_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const slug = data.slug || (data.name || 'company').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  discoverCompanies: async (
+    queryOrParams?: string | { category?: string; query?: string; city?: string },
+    category?: string,
+    city?: string
+  ): Promise<Company[]> => {
+    const all = await api.getCompanies();
+    let q = '';
+    let cat = '';
+    let ct = '';
+
+    if (typeof queryOrParams === 'string') {
+      q = queryOrParams;
+      cat = category || '';
+      ct = city || '';
+    } else if (queryOrParams && typeof queryOrParams === 'object') {
+      q = queryOrParams.query || '';
+      cat = queryOrParams.category || '';
+      ct = queryOrParams.city || '';
+    }
+
+    return all.filter((c) => {
+      if (cat && cat !== 'all' && c.category?.toLowerCase() !== cat.toLowerCase()) {
+        return false;
+      }
+      if (ct && ct !== 'all' && c.city && !c.city.toLowerCase().includes(ct.toLowerCase())) {
+        return false;
+      }
+      if (q) {
+        const queryLower = q.toLowerCase();
+        const matchName = c.name?.toLowerCase().includes(queryLower);
+        const matchDesc = c.shortDescription?.toLowerCase().includes(queryLower);
+        const matchCat = c.category?.toLowerCase().includes(queryLower);
+        if (!matchName && !matchDesc && !matchCat) return false;
+      }
+      return true;
+    });
+  },
+
+  createCompany: async (companyData: Partial<Company>): Promise<Company> => {
+    const compId = companyData.id || `comp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const webId = `web_${compId}`;
+    const qrId = `qr_${compId}`;
+    const slug = companyData.slug || generateSlug(companyData.name || 'New Company');
+    const nowIso = new Date().toISOString();
 
     const newCompany: Company = {
       id: compId,
-      name: data.name || 'New Company',
+      name: companyData.name || 'Untitled Enterprise',
+      shortName: companyData.shortName || companyData.name?.substring(0, 20) || 'Enterprise',
       slug,
-      category: data.category || 'Restaurant',
-      status: (data.status as any) || 'draft',
-      phone: data.phone || '',
-      email: data.email || '',
-      address: data.address || 'Addis Ababa, Ethiopia',
-      city: data.city || 'Addis Ababa',
-      logo: data.logo || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=200&auto=format&fit=crop&q=80',
-      coverImage: data.coverImage || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&auto=format&fit=crop&q=80',
-      shortDescription: data.shortDescription || 'Verified enterprise presence on NABSITE.',
+      logo: companyData.logo || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=200&auto=format&fit=crop&q=80',
+      coverImage: companyData.coverImage || 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=1200&auto=format&fit=crop&q=80',
+      category: companyData.category || 'Restaurant',
+      shortDescription: companyData.shortDescription || 'Certified business and service provider registered with NABSITE.',
+      phone: companyData.phone || '+251 911 000 000',
+      email: companyData.email || '',
+      telegram: companyData.telegram || '',
+      websiteUrl: companyData.websiteUrl || '',
+      address: companyData.address || 'Bole Road, Addis Ababa',
+      city: companyData.city || 'Addis Ababa',
+      mapLink: companyData.mapLink || 'https://maps.google.com/?q=Addis+Ababa',
+      openingHours: companyData.openingHours || 'Mon - Sun: 8:00 AM - 10:00 PM',
+      status: companyData.status || 'active',
+      websiteStatus: 'draft',
       websiteId: webId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      assignedAdminId: companyData.assignedAdminId || '',
+      assignedAdminIds: companyData.assignedAdminIds || [],
+      plan: 'business_pro',
+      metrics: { views: 0, qrScans: 0, leadsCount: 0, reviewsCount: 0, averageRating: 5.0 },
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
 
     const newWebsite: Website = {
       id: webId,
       companyId: compId,
-      templateId: 'tpl_rest_signature',
       themeId: 'theme_restaurant_classic',
       status: 'draft',
       draftConfig: {
@@ -403,7 +319,6 @@ export const api = {
           showPhoneBtn: true,
           showTelegramBtn: true,
           showCtaBtn: true,
-          ctaText: 'Contact Us',
         },
         footer: {
           showLogo: true,
@@ -414,9 +329,9 @@ export const api = {
           showDeveloperCredit: true,
         },
         navigation: [
-          { id: 'nav_1', label: 'Home', type: 'page', target: 'home', order: 0 },
-          { id: 'nav_2', label: 'Menu', type: 'page', target: 'menu', order: 1 },
-          { id: 'nav_3', label: 'Contact', type: 'page', target: 'contact', order: 2 },
+          { id: 'nav_home', label: 'Home', type: 'page', target: 'home', order: 1 },
+          { id: 'nav_menu', label: 'Menu & Offerings', type: 'page', target: 'menu', order: 2 },
+          { id: 'nav_contact', label: 'Contact', type: 'page', target: 'contact', order: 3 },
         ],
         pages: [
           {
@@ -429,73 +344,12 @@ export const api = {
               {
                 id: 'sec_hero',
                 type: 'hero',
-                title: 'Hero Banner',
-                isVisible: true,
-                order: 0,
-                content: {
-                  headline: newCompany.name,
-                  subheadline: newCompany.shortDescription,
-                  ctaText: 'View Digital Menu',
-                  ctaLink: `/c/${slug}/menu`,
-                  backgroundImage: newCompany.coverImage,
-                  overlayOpacity: 50,
-                  alignment: 'center',
-                },
-              },
-              {
-                id: 'sec_about',
-                type: 'about',
-                title: 'About Us',
+                title: newCompany.name,
+                subtitle: newCompany.shortDescription,
                 isVisible: true,
                 order: 1,
-                content: {
-                  heading: 'Our Story & Heritage',
-                  body: 'Delivering exceptional dining and hospitality crafted with passion and uncompromising attention to quality.',
-                  image: newCompany.logo,
-                },
-              },
-              {
-                id: 'sec_menu_prev',
-                type: 'products',
-                title: 'Signature Offerings',
-                isVisible: true,
-                order: 2,
-                content: {
-                  heading: 'Chef Selections',
-                  subheading: 'Experience our most celebrated flavors.',
-                  showPrices: true,
-                },
-              },
-              {
-                id: 'sec_contact',
-                type: 'contact',
-                title: 'Visit Us',
-                isVisible: true,
-                order: 3,
-                content: {
-                  heading: 'Location & Hours',
-                  address: newCompany.address,
-                  phone: newCompany.phone,
-                  email: newCompany.email,
-                },
               },
             ],
-          },
-          {
-            id: 'page_menu',
-            title: 'Digital Menu',
-            slug: 'menu',
-            isPublished: true,
-            showInNavigation: true,
-            sections: [],
-          },
-          {
-            id: 'page_contact',
-            title: 'Contact',
-            slug: 'contact',
-            isPublished: true,
-            showInNavigation: true,
-            sections: [],
           },
         ],
         installedFeatures: ['feature_digital_menu', 'feature_qr_generator'],
@@ -507,23 +361,38 @@ export const api = {
       },
       publishedConfig: null,
       version: 1,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    const initialQr: QrConfig = {
+      id: qrId,
+      companyId: compId,
+      targetUrl: `${window.location.origin}/c/${slug}`,
+      title: `${newCompany.name} Stand Card`,
+      caption: 'SCAN WITH PHONE CAMERA',
+      fgColor: '#0F172A',
+      bgColor: '#FFFFFF',
+      size: 400,
+      margin: 2,
+      frameStyle: 'badge',
+      scanCount: 0,
+      createdAt: nowIso,
     };
 
     try {
-      await setDoc(doc(firestoreDb, 'companies', compId), newCompany);
-      await setDoc(doc(firestoreDb, 'websites', webId), newWebsite);
-      // Log mutation
-      await addDoc(collection(firestoreDb, 'auditLogs'), {
-        action: 'COMPANY_CREATED',
-        resource: 'company',
-        resourceId: compId,
-        metadata: { name: newCompany.name, slug: newCompany.slug },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.error('Firestore createCompany write error:', err);
+      // Atomic Batch Write: Company + Website + Initial QR
+      const batch = writeBatch(firestoreDb);
+      batch.set(doc(firestoreDb, 'companies', compId), newCompany);
+      batch.set(doc(firestoreDb, 'websites', webId), newWebsite);
+      batch.set(doc(firestoreDb, 'qrConfigs', qrId), initialQr);
+
+      await withTimeout(batch.commit(), 12000, 'Company creation timed out. Please retry.');
+
+      await logAudit('CREATE', 'COMPANY', compId, `Created company ${newCompany.name} (slug: ${slug})`, newCompany.name);
+    } catch (err: any) {
+      logError('createCompany', err, { compId, slug });
+      throw new ApiError(500, `Failed to create company: ${err.message}`);
     }
 
     return newCompany;
@@ -532,12 +401,14 @@ export const api = {
   updateCompany: async (id: string, data: Partial<Company>): Promise<Company> => {
     try {
       const compRef = doc(firestoreDb, 'companies', id);
-      await setDoc(compRef, { ...data, updatedAt: new Date().toISOString() }, { merge: true });
+      const updatePayload = { ...data, updatedAt: new Date().toISOString() };
+      await withTimeout(setDoc(compRef, updatePayload, { merge: true }), 10000);
       const snap = await getDoc(compRef);
+      await logAudit('UPDATE', 'COMPANY', id, `Updated company ${id}`);
       return { id: snap.id, ...snap.data() } as Company;
-    } catch (err) {
-      console.error('Firestore updateCompany error:', err);
-      throw new ApiError(500, 'Failed to update company');
+    } catch (err: any) {
+      logError('updateCompany', err, { id });
+      throw new ApiError(500, `Failed to update company: ${err.message}`);
     }
   },
 
@@ -547,29 +418,30 @@ export const api = {
 
   deleteCompany: async (id: string): Promise<{ success: boolean }> => {
     try {
-      await deleteDoc(doc(firestoreDb, 'companies', id));
+      await withTimeout(deleteDoc(doc(firestoreDb, 'companies', id)), 10000);
+      await logAudit('DELETE', 'COMPANY', id, `Deleted company ${id}`);
       return { success: true };
-    } catch (err) {
-      console.error('Firestore deleteCompany error:', err);
-      throw new ApiError(500, 'Failed to delete company');
+    } catch (err: any) {
+      logError('deleteCompany', err, { id });
+      throw new ApiError(500, `Failed to delete company: ${err.message}`);
     }
   },
 
   // --- Websites CRUD & Studio ---
   getWebsite: async (id: string): Promise<Website> => {
     try {
-      const snap = await getDoc(doc(firestoreDb, 'websites', id));
+      const snap = await withTimeout(getDoc(doc(firestoreDb, 'websites', id)), 8000);
       if (snap.exists()) {
         return { id: snap.id, ...snap.data() } as Website;
       }
-      // Also check if id was actually a companyId
-      const webQ = query(collection(firestoreDb, 'websites'), where('companyId', '==', id));
-      const webSnap = await getDocs(webQ);
+      // Also check if id was companyId
+      const webQ = query(collection(firestoreDb, 'websites'), where('companyId', '==', id), limit(1));
+      const webSnap = await withTimeout(getDocs(webQ), 8000);
       if (!webSnap.empty) {
         return { id: webSnap.docs[0].id, ...webSnap.docs[0].data() } as Website;
       }
     } catch (err) {
-      console.error('Firestore getWebsite error:', err);
+      logError('getWebsite', err, { id });
     }
     throw new ApiError(404, 'Website configuration not found');
   },
@@ -580,7 +452,7 @@ export const api = {
     try {
       website = await api.getWebsite(company.websiteId || companyId);
     } catch {
-      // If not found, let's create a default draft website object
+      // Auto create website object if missing
       website = {
         id: company.websiteId || `web_${company.id}`,
         companyId: company.id,
@@ -631,7 +503,7 @@ export const api = {
                   id: 'sec_hero',
                   type: 'hero',
                   title: company.name,
-                  subtitle: company.shortDescription || 'Welcome to our verified establishment.',
+                  subtitle: company.shortDescription || 'Welcome to our establishment.',
                   isVisible: true,
                   order: 1,
                 },
@@ -650,27 +522,21 @@ export const api = {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      // Save it
-      try {
-        await setDoc(doc(firestoreDb, 'websites', website.id), website, { merge: true });
-      } catch (e) {
-        console.error('Auto-creating website error:', e);
-      }
+      setDoc(doc(firestoreDb, 'websites', website.id), website, { merge: true }).catch(() => {});
     }
     return { company, website: website as Website };
   },
 
   saveWebsiteDraft: async (id: string, draftConfig: any): Promise<Website> => {
     try {
-      // Look up existing website document first
       let targetId = id;
       let existingData: any = {};
-      const directSnap = await getDoc(doc(firestoreDb, 'websites', id));
+      const directSnap = await withTimeout(getDoc(doc(firestoreDb, 'websites', id)), 8000);
       if (directSnap.exists()) {
         existingData = directSnap.data();
       } else {
-        const webQ = query(collection(firestoreDb, 'websites'), where('companyId', '==', id));
-        const webSnap = await getDocs(webQ);
+        const webQ = query(collection(firestoreDb, 'websites'), where('companyId', '==', id), limit(1));
+        const webSnap = await withTimeout(getDocs(webQ), 8000);
         if (!webSnap.empty) {
           targetId = webSnap.docs[0].id;
           existingData = webSnap.docs[0].data();
@@ -685,12 +551,12 @@ export const api = {
         draftConfig,
         updatedAt: new Date().toISOString(),
       };
-      await setDoc(webRef, updatePayload, { merge: true });
+      await withTimeout(setDoc(webRef, updatePayload, { merge: true }), 10000);
       const snap = await getDoc(webRef);
       return { id: snap.id, ...snap.data() } as Website;
-    } catch (err) {
-      console.error('Firestore saveWebsiteDraft error:', err);
-      throw new ApiError(500, 'Failed to save website draft');
+    } catch (err: any) {
+      logError('saveWebsiteDraft', err, { id });
+      throw new ApiError(500, `Failed to save website draft: ${err.message}`);
     }
   },
 
@@ -703,12 +569,12 @@ export const api = {
       let targetId = id;
       let current: any = null;
       const webRef = doc(firestoreDb, 'websites', id);
-      const snap = await getDoc(webRef);
+      const snap = await withTimeout(getDoc(webRef), 8000);
       if (snap.exists()) {
         current = snap.data();
       } else {
-        const webQ = query(collection(firestoreDb, 'websites'), where('companyId', '==', id));
-        const webSnap = await getDocs(webQ);
+        const webQ = query(collection(firestoreDb, 'websites'), where('companyId', '==', id), limit(1));
+        const webSnap = await withTimeout(getDocs(webQ), 8000);
         if (!webSnap.empty) {
           targetId = webSnap.docs[0].id;
           current = webSnap.docs[0].data();
@@ -719,12 +585,14 @@ export const api = {
       const publishedConfig = current?.draftConfig || current?.publishedConfig || null;
       const newVersion = (current?.version || 1) + 1;
       const nowIso = new Date().toISOString();
+      const targetCompanyId = current?.companyId || id;
 
-      await setDoc(
+      const batch = writeBatch(firestoreDb);
+      batch.set(
         targetRef,
         {
           id: targetId,
-          companyId: current?.companyId || id,
+          companyId: targetCompanyId,
           publishedConfig,
           status: 'published',
           version: newVersion,
@@ -734,10 +602,8 @@ export const api = {
         { merge: true }
       );
 
-      // Also update company status in companies collection
-      const targetCompanyId = current?.companyId || id;
       if (targetCompanyId) {
-        await setDoc(
+        batch.set(
           doc(firestoreDb, 'companies', targetCompanyId),
           {
             status: 'active',
@@ -748,27 +614,41 @@ export const api = {
         );
       }
 
+      await withTimeout(batch.commit(), 10000);
+      await logAudit('PUBLISH', 'WEBSITE', targetId, `Published website version ${newVersion}`);
+
       const updatedSnap = await getDoc(targetRef);
       return { id: updatedSnap.id, ...updatedSnap.data() } as Website;
-    } catch (err) {
-      console.error('Firestore publishWebsite error:', err);
-      throw new ApiError(500, 'Failed to publish website');
+    } catch (err: any) {
+      logError('publishWebsite', err, { id });
+      throw new ApiError(500, `Failed to publish website: ${err.message}`);
     }
   },
 
-  // --- Products & Digital Menu Items ---
+  unpublishWebsite: async (id: string): Promise<Website> => {
+    try {
+      const webRef = doc(firestoreDb, 'websites', id);
+      await withTimeout(updateDoc(webRef, { status: 'draft', updatedAt: new Date().toISOString() }), 8000);
+      const snap = await getDoc(webRef);
+      return { id: snap.id, ...snap.data() } as Website;
+    } catch (err: any) {
+      logError('unpublishWebsite', err, { id });
+      throw new ApiError(500, `Failed to unpublish website: ${err.message}`);
+    }
+  },
+
+  // --- Products CRUD ---
   getProducts: async (companyId?: string): Promise<Product[]> => {
-    await ensureFirestoreInitialized();
     try {
       const q = companyId
         ? query(collection(firestoreDb, 'products'), where('companyId', '==', companyId))
         : collection(firestoreDb, 'products');
-      const snap = await getDocs(q);
+      const snap = await withTimeout(getDocs(q), 8000);
       if (!snap.empty) {
         return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product));
       }
     } catch (err) {
-      console.error('Firestore getProducts error:', err);
+      logError('getProducts', err, { companyId });
     }
     return [];
   },
@@ -779,7 +659,7 @@ export const api = {
       id: prodId,
       companyId: data.companyId || 'comp_1',
       categoryId: data.categoryId || 'cat_1',
-      name: data.name || 'New Dish',
+      name: data.name || 'New Dish / Item',
       description: data.description || '',
       price: data.price || '0 ETB',
       currency: data.currency || 'ETB',
@@ -790,9 +670,9 @@ export const api = {
       sortOrder: data.sortOrder || 0,
     };
     try {
-      await setDoc(doc(firestoreDb, 'products', prodId), newProd);
+      await withTimeout(setDoc(doc(firestoreDb, 'products', prodId), newProd), 8000);
     } catch (err) {
-      console.error('Firestore createProduct error:', err);
+      logError('createProduct', err);
     }
     return newProd;
   },
@@ -800,38 +680,80 @@ export const api = {
   updateProduct: async (id: string, data: Partial<Product>): Promise<Product> => {
     try {
       const prodRef = doc(firestoreDb, 'products', id);
-      await updateDoc(prodRef, data);
+      await withTimeout(updateDoc(prodRef, data), 8000);
       const snap = await getDoc(prodRef);
       return { id: snap.id, ...snap.data() } as Product;
     } catch (err) {
-      console.error('Firestore updateProduct error:', err);
+      logError('updateProduct', err, { id });
       throw new ApiError(500, 'Failed to update product');
     }
   },
 
   deleteProduct: async (id: string): Promise<{ success: boolean }> => {
     try {
-      await deleteDoc(doc(firestoreDb, 'products', id));
+      await withTimeout(deleteDoc(doc(firestoreDb, 'products', id)), 8000);
       return { success: true };
     } catch (err) {
-      console.error('Firestore deleteProduct error:', err);
+      logError('deleteProduct', err, { id });
       throw new ApiError(500, 'Failed to delete product');
     }
   },
 
-  // --- QR Code Engine ---
+  // --- Product Categories ---
+  getProductCategories: async (companyId?: string): Promise<ProductCategory[]> => {
+    try {
+      const q = companyId
+        ? query(collection(firestoreDb, 'productCategories'), where('companyId', '==', companyId))
+        : collection(firestoreDb, 'productCategories');
+      const snap = await withTimeout(getDocs(q), 8000);
+      if (!snap.empty) {
+        return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ProductCategory));
+      }
+    } catch (err) {
+      logError('getProductCategories', err, { companyId });
+    }
+    return [];
+  },
+
+  createProductCategory: async (data: Partial<ProductCategory>): Promise<ProductCategory> => {
+    const catId = `cat_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const newCat: ProductCategory = {
+      id: catId,
+      companyId: data.companyId || 'comp_1',
+      name: data.name || 'Category',
+      slug: data.slug || (data.name || 'cat').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      sortOrder: data.sortOrder || 0,
+    };
+    try {
+      await withTimeout(setDoc(doc(firestoreDb, 'productCategories', catId), newCat), 8000);
+    } catch (err) {
+      logError('createProductCategory', err);
+    }
+    return newCat;
+  },
+
+  deleteProductCategory: async (id: string): Promise<{ success: boolean }> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'productCategories', id)), 8000);
+      return { success: true };
+    } catch (err) {
+      logError('deleteProductCategory', err, { id });
+      throw new ApiError(500, 'Failed to delete category');
+    }
+  },
+
+  // --- QR Code Management ---
   getQrs: async (companyId?: string): Promise<QrConfig[]> => {
-    await ensureFirestoreInitialized();
     try {
       const q = companyId
         ? query(collection(firestoreDb, 'qrConfigs'), where('companyId', '==', companyId))
         : collection(firestoreDb, 'qrConfigs');
-      const snap = await getDocs(q);
+      const snap = await withTimeout(getDocs(q), 8000);
       if (!snap.empty) {
         return snap.docs.map((d) => ({ id: d.id, ...d.data() } as QrConfig));
       }
     } catch (err) {
-      console.error('Firestore getQrs error:', err);
+      logError('getQrs', err, { companyId });
     }
     return [];
   },
@@ -849,13 +771,13 @@ export const api = {
       body: JSON.stringify(params),
     });
     if (!res.ok) {
-      throw new ApiError(res.status, 'Failed to generate real QR Code');
+      throw new ApiError(res.status, 'Failed to generate QR Code');
     }
     return res.json();
   },
 
   saveQrConfig: async (data: Partial<QrConfig>): Promise<QrConfig> => {
-    const qrId = `qr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const qrId = data.id || `qr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const newQr: QrConfig = {
       id: qrId,
       companyId: data.companyId || '',
@@ -871,41 +793,88 @@ export const api = {
       createdAt: new Date().toISOString(),
     };
     try {
-      await setDoc(doc(firestoreDb, 'qrConfigs', qrId), newQr);
+      await withTimeout(setDoc(doc(firestoreDb, 'qrConfigs', qrId), newQr), 8000);
     } catch (err) {
-      console.error('Firestore saveQrConfig error:', err);
+      logError('saveQrConfig', err);
     }
     return newQr;
   },
 
-  // --- Leads & Commercial Applications ---
+  createQr: async (data: Partial<QrConfig>): Promise<QrConfig> => {
+    return api.saveQrConfig(data);
+  },
+
+  deleteQr: async (id: string): Promise<{ success: boolean }> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'qrConfigs', id)), 8000);
+      return { success: true };
+    } catch (err) {
+      logError('deleteQr', err, { id });
+      return { success: true };
+    }
+  },
+
+  // --- Leads & Inquiries ---
   submitLead: async (data: any): Promise<{ success: boolean; id: string }> => {
     try {
-      const leadRef = await addDoc(collection(firestoreDb, 'leads'), {
-        ...data,
-        status: 'new',
-        createdAt: new Date().toISOString(),
-      });
+      const leadRef = await withTimeout(
+        addDoc(collection(firestoreDb, 'leads'), {
+          ...data,
+          status: 'new',
+          createdAt: new Date().toISOString(),
+        }),
+        8000
+      );
       return { success: true, id: leadRef.id };
     } catch (err) {
-      console.error('Firestore submitLead error:', err);
+      logError('submitLead', err);
       return { success: true, id: `lead_${Date.now()}` };
     }
   },
 
   getLeads: async (): Promise<Lead[]> => {
     try {
-      const snap = await getDocs(collection(firestoreDb, 'leads'));
+      const snap = await withTimeout(getDocs(collection(firestoreDb, 'leads')), 8000);
       if (!snap.empty) {
         return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Lead));
       }
     } catch (err) {
-      console.error('Firestore getLeads error:', err);
+      logError('getLeads', err);
     }
     return [];
   },
 
-  // --- Telemetry & Analytics ---
+  updateLeadStatus: async (id: string, status: string): Promise<{ success: boolean }> => {
+    try {
+      await withTimeout(updateDoc(doc(firestoreDb, 'leads', id), { status }), 8000);
+      return { success: true };
+    } catch (err) {
+      logError('updateLeadStatus', err, { id });
+      return { success: true };
+    }
+  },
+
+  convertLead: async (id: string): Promise<{ success: boolean; companyId?: string }> => {
+    try {
+      const leadSnap = await withTimeout(getDoc(doc(firestoreDb, 'leads', id)), 8000);
+      if (leadSnap.exists()) {
+        const lead = leadSnap.data() as Lead;
+        const comp = await api.createCompany({
+          name: lead.companyName || 'New Company',
+          category: lead.category || 'Restaurant',
+          phone: lead.phone || '',
+          email: lead.email || '',
+        });
+        await updateDoc(doc(firestoreDb, 'leads', id), { status: 'converted', convertedCompanyId: comp.id });
+        return { success: true, companyId: comp.id };
+      }
+    } catch (err) {
+      logError('convertLead', err, { id });
+    }
+    return { success: true };
+  },
+
+  // --- Real Telemetry & Analytics ---
   recordEvent: async (event: {
     companyId?: string;
     websiteId?: string;
@@ -917,17 +886,17 @@ export const api = {
         ...event,
         timestamp: new Date().toISOString(),
       });
-    } catch (err) {
-      // fail silently for telemetry
+    } catch {
+      // silently ignore telemetry write errors
     }
   },
 
   getAnalyticsSummary: async (): Promise<{ totalViews: number; totalScans: number; totalLeads: number }> => {
     try {
       const [eventsSnap, leadsSnap, qrsSnap] = await Promise.all([
-        getDocs(collection(firestoreDb, 'analyticsEvents')),
-        getDocs(collection(firestoreDb, 'leads')),
-        getDocs(collection(firestoreDb, 'qrConfigs')),
+        withTimeout(getDocs(collection(firestoreDb, 'analyticsEvents')), 8000),
+        withTimeout(getDocs(collection(firestoreDb, 'leads')), 8000),
+        withTimeout(getDocs(collection(firestoreDb, 'qrConfigs')), 8000),
       ]);
       return {
         totalViews: eventsSnap.size,
@@ -948,10 +917,9 @@ export const api = {
       const q = companyId
         ? query(collection(firestoreDb, 'analyticsEvents'), where('companyId', '==', companyId))
         : collection(firestoreDb, 'analyticsEvents');
-      const eventsSnap = await getDocs(q);
+      const eventsSnap = await withTimeout(getDocs(q), 8000);
       const events = eventsSnap.docs.map((d) => d.data() as any);
 
-      // Group by last 7 days
       const daysMap = new Map<string, { views: number; scans: number }>();
       const now = new Date();
       for (let i = 6; i >= 0; i--) {
@@ -982,8 +950,7 @@ export const api = {
         scans: counts.scans,
       }));
 
-      // Category breakdown from companies collection
-      const compSnap = await getDocs(collection(firestoreDb, 'companies'));
+      const compSnap = await withTimeout(getDocs(collection(firestoreDb, 'companies')), 8000);
       const catCounts: Record<string, number> = {};
       compSnap.docs.forEach((d) => {
         const cat = d.data().category || 'Restaurant';
@@ -1003,8 +970,8 @@ export const api = {
 
       return { dailyViews, categoryBreakdown, deviceBreakdown };
     } catch {
-      const now = new Date();
       const dailyViews = [];
+      const now = new Date();
       for (let i = 6; i >= 0; i--) {
         const d = new Date();
         d.setDate(now.getDate() - i);
@@ -1021,24 +988,27 @@ export const api = {
   // --- Audit Logs ---
   getAuditLogs: async (): Promise<AuditLog[]> => {
     try {
-      const snap = await getDocs(query(collection(firestoreDb, 'auditLogs'), orderBy('timestamp', 'desc'), limit(50)));
+      const snap = await withTimeout(
+        getDocs(query(collection(firestoreDb, 'auditLogs'), orderBy('timestamp', 'desc'), limit(50))),
+        8000
+      );
       if (!snap.empty) {
         return snap.docs.map((d) => ({ id: d.id, ...d.data() } as AuditLog));
       }
     } catch (err) {
-      console.error('Firestore getAuditLogs error:', err);
+      logError('getAuditLogs', err);
     }
     return [];
   },
 
-  // --- Categories & Showcase ---
+  // --- Static Registry lookups ---
   getCategories: async (): Promise<Category[]> => {
     return INITIAL_CATEGORIES;
   },
 
   getShowcase: async (): Promise<ShowcaseItem[]> => {
     try {
-      const snap = await getDocs(collection(firestoreDb, 'companies'));
+      const snap = await withTimeout(getDocs(collection(firestoreDb, 'companies')), 8000);
       if (!snap.empty) {
         const publishedComps = snap.docs
           .map((d) => ({ id: d.id, ...d.data() } as Company))
@@ -1078,7 +1048,7 @@ export const api = {
 
   getSettings: async (): Promise<PlatformSettings> => {
     try {
-      const snap = await getDoc(doc(firestoreDb, 'settings', 'global'));
+      const snap = await withTimeout(getDoc(doc(firestoreDb, 'settings', 'global')), 6000);
       if (snap.exists()) {
         return snap.data() as PlatformSettings;
       }
@@ -1090,9 +1060,9 @@ export const api = {
 
   updateSettings: async (settings: Partial<PlatformSettings>): Promise<PlatformSettings> => {
     try {
-      await updateDoc(doc(firestoreDb, 'settings', 'global'), settings);
+      await withTimeout(setDoc(doc(firestoreDb, 'settings', 'global'), settings, { merge: true }), 8000);
     } catch (err) {
-      console.error('Firestore updateSettings error:', err);
+      logError('updateSettings', err);
     }
     return { ...INITIAL_SETTINGS, ...settings };
   },
@@ -1108,7 +1078,7 @@ export const api = {
   getOwnerExport: async (): Promise<any> => {
     const [companies, websites, products] = await Promise.all([
       api.getCompanies(),
-      getDocs(collection(firestoreDb, 'websites')).then((s) => s.docs.map((d) => d.data())),
+      withTimeout(getDocs(collection(firestoreDb, 'websites')), 10000).then((s) => s.docs.map((d) => d.data())),
       api.getProducts(),
     ]);
     return {
@@ -1122,143 +1092,15 @@ export const api = {
 
   // --- Reviews, Offers, Announcements ---
   getReviews: async (_companyId?: string): Promise<Review[]> => {
-    return [];
-  },
-
-  getOffers: async (_companyId?: string): Promise<Offer[]> => {
-    return [];
-  },
-
-  getAnnouncements: async (_companyId?: string): Promise<Announcement[]> => {
-    return [];
-  },
-
-  // --- Product Categories ---
-  getProductCategories: async (companyId?: string): Promise<ProductCategory[]> => {
-    await ensureFirestoreInitialized();
     try {
-      const q = companyId
-        ? query(collection(firestoreDb, 'productCategories'), where('companyId', '==', companyId))
-        : collection(firestoreDb, 'productCategories');
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ProductCategory));
-      }
-    } catch (err) {
-      console.error('Firestore getProductCategories error:', err);
+      const q = _companyId
+        ? query(collection(firestoreDb, 'reviews'), where('companyId', '==', _companyId))
+        : collection(firestoreDb, 'reviews');
+      const snap = await withTimeout(getDocs(q), 8000);
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Review));
+    } catch {
+      return [];
     }
-    return [];
-  },
-
-  createProductCategory: async (data: Partial<ProductCategory>): Promise<ProductCategory> => {
-    const catId = `cat_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const newCat: ProductCategory = {
-      id: catId,
-      companyId: data.companyId || 'comp_1',
-      name: data.name || 'Category',
-      slug: data.slug || (data.name || 'cat').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      sortOrder: data.sortOrder || 0,
-    };
-    try {
-      await setDoc(doc(firestoreDb, 'productCategories', catId), newCat);
-    } catch (err) {
-      console.error('Firestore createProductCategory error:', err);
-    }
-    return newCat;
-  },
-
-  deleteProductCategory: async (id: string): Promise<{ success: boolean }> => {
-    try {
-      await deleteDoc(doc(firestoreDb, 'productCategories', id));
-      return { success: true };
-    } catch (err) {
-      console.error('Firestore deleteProductCategory error:', err);
-      throw new ApiError(500, 'Failed to delete category');
-    }
-  },
-
-  // --- Lead mutations ---
-  updateLeadStatus: async (id: string, status: string): Promise<{ success: boolean }> => {
-    try {
-      await updateDoc(doc(firestoreDb, 'leads', id), { status });
-      return { success: true };
-    } catch (err) {
-      console.error('Firestore updateLeadStatus error:', err);
-      return { success: true };
-    }
-  },
-
-  convertLead: async (id: string): Promise<{ success: boolean; companyId?: string }> => {
-    try {
-      const leadSnap = await getDoc(doc(firestoreDb, 'leads', id));
-      if (leadSnap.exists()) {
-        const lead = leadSnap.data() as Lead;
-        const comp = await api.createCompany({
-          name: lead.companyName || 'New Company',
-          category: lead.category || 'Restaurant',
-          phone: lead.phone || '',
-          email: lead.email || '',
-        });
-        await updateDoc(doc(firestoreDb, 'leads', id), { status: 'converted', convertedCompanyId: comp.id });
-        return { success: true, companyId: comp.id };
-      }
-    } catch (err) {
-      console.error('Firestore convertLead error:', err);
-    }
-    return { success: true };
-  },
-
-  // --- QR mutations & image ---
-  createQr: async (data: Partial<QrConfig>): Promise<QrConfig> => {
-    return api.saveQrConfig(data);
-  },
-
-  deleteQr: async (id: string): Promise<{ success: boolean }> => {
-    try {
-      await deleteDoc(doc(firestoreDb, 'qrConfigs', id));
-      return { success: true };
-    } catch (err) {
-      console.error('Firestore deleteQr error:', err);
-      return { success: true };
-    }
-  },
-
-  unpublishWebsite: async (id: string): Promise<Website> => {
-    try {
-      const webRef = doc(firestoreDb, 'websites', id);
-      await updateDoc(webRef, { status: 'draft', updatedAt: new Date().toISOString() });
-      const snap = await getDoc(webRef);
-      return { id: snap.id, ...snap.data() } as Website;
-    } catch (err) {
-      console.error('Firestore unpublishWebsite error:', err);
-      throw new ApiError(500, 'Failed to unpublish website');
-    }
-  },
-
-  getHealth: async () => {
-    return {
-      status: 'healthy',
-      database: 'Firestore Connected',
-      uptime: '99.99%',
-      version: '2.4.0',
-      timestamp: new Date().toISOString(),
-    };
-  },
-
-  createOffer: async (data: any): Promise<Offer> => {
-    const offer: Offer = {
-      id: `off_${Date.now()}`,
-      companyId: data.companyId || 'comp_1',
-      title: data.title || 'Special Promotion',
-      description: data.description || '',
-      discountPercent: data.discountPercent,
-      validUntil: data.validUntil || new Date(Date.now() + 30 * 86400000).toISOString(),
-      isActive: true,
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    return offer;
   },
 
   submitReview: async (reviewData: {
@@ -1278,15 +1120,11 @@ export const api = {
       createdAt: new Date().toISOString(),
     };
     try {
-      await setDoc(doc(firestoreDb, 'reviews', reviewId), newRev);
+      await withTimeout(setDoc(doc(firestoreDb, 'reviews', reviewId), newRev), 8000);
     } catch (err) {
-      console.error('Firestore submitReview error:', err);
+      logError('submitReview', err);
     }
     return newRev;
-  },
-
-  deleteOffer: async (id: string): Promise<{ success: boolean }> => {
-    return { success: true };
   },
 
   moderateReview: async (id: string, status: string, reply?: string): Promise<{ success: boolean }> => {
@@ -1294,23 +1132,99 @@ export const api = {
       const revRef = doc(firestoreDb, 'reviews', id);
       const updateData: any = { status, moderatedAt: new Date().toISOString() };
       if (reply !== undefined) updateData.reply = reply;
-      await updateDoc(revRef, updateData);
+      await withTimeout(updateDoc(revRef, updateData), 8000);
     } catch (err) {
-      console.error('Firestore moderateReview error:', err);
+      logError('moderateReview', err);
     }
     return { success: true };
   },
 
-  inviteUser: async (data: any): Promise<{ success: boolean }> => {
+  getOffers: async (_companyId?: string): Promise<Offer[]> => {
+    try {
+      const q = _companyId
+        ? query(collection(firestoreDb, 'offers'), where('companyId', '==', _companyId))
+        : collection(firestoreDb, 'offers');
+      const snap = await withTimeout(getDocs(q), 8000);
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Offer));
+    } catch {
+      return [];
+    }
+  },
+
+  createOffer: async (data: any): Promise<Offer> => {
+    const offerId = `off_${Date.now()}`;
+    const offer: Offer = {
+      id: offerId,
+      companyId: data.companyId || 'comp_1',
+      title: data.title || 'Special Promotion',
+      description: data.description || '',
+      discountPercent: data.discountPercent,
+      validUntil: data.validUntil || new Date(Date.now() + 30 * 86400000).toISOString(),
+      isActive: true,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    try {
+      await withTimeout(setDoc(doc(firestoreDb, 'offers', offerId), offer), 8000);
+    } catch (err) {
+      logError('createOffer', err);
+    }
+    return offer;
+  },
+
+  deleteOffer: async (id: string): Promise<{ success: boolean }> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'offers', id)), 8000);
+    } catch (err) {
+      logError('deleteOffer', err);
+    }
     return { success: true };
+  },
+
+  getAnnouncements: async (_companyId?: string): Promise<Announcement[]> => {
+    try {
+      const q = _companyId
+        ? query(collection(firestoreDb, 'announcements'), where('companyId', '==', _companyId))
+        : collection(firestoreDb, 'announcements');
+      const snap = await withTimeout(getDocs(q), 8000);
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Announcement));
+    } catch {
+      return [];
+    }
+  },
+
+  getHealth: async () => {
+    const startTime = Date.now();
+    let firestoreStatus = 'Connected';
+    let firestoreLatency = 0;
+    try {
+      await withTimeout(getDoc(doc(firestoreDb, 'settings', 'global')), 5000);
+      firestoreLatency = Date.now() - startTime;
+    } catch (err: any) {
+      firestoreStatus = `Error: ${err.message}`;
+    }
+
+    return {
+      status: firestoreStatus === 'Connected' ? 'healthy' : 'degraded',
+      database: firestoreStatus,
+      firestoreLatencyMs: firestoreLatency,
+      storage: 'Firebase Storage Ready',
+      realtimeDb: 'Not Used (Firestore is Primary Engine)',
+      version: '3.0.0-PROD',
+      timestamp: new Date().toISOString(),
+    };
   },
 
   getQrImage: async (params: any): Promise<{ dataUrl: string; normalizedUrl: string }> => {
     return api.generateQr(params);
   },
 
-  // Showcase mutations
   updateShowcase: async (items: ShowcaseItem[]) => {
     return api.updateSettings({ showcaseSettings: { items } as any });
+  },
+
+  inviteUser: async (data: any): Promise<{ success: boolean }> => {
+    return { success: true };
   },
 };

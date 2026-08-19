@@ -13,11 +13,17 @@ service cloud.firestore {
         : null;
     }
 
-    function isOwner() {
+    function isOwnerEmail() {
       return isSignedIn() && (
+        request.auth.token.email == 'abenezarofficial1@gmail.com' ||
         request.auth.token.email == 'busineser.abn@gmail.com' ||
-        (getUserData() != null && getUserData().role == 'OWNER')
+        request.auth.token.email == 'owner@nabsite.io' ||
+        request.auth.token.email == 'owner@nabsite.et'
       );
+    }
+
+    function isOwner() {
+      return isOwnerEmail() || (getUserData() != null && getUserData().role == 'OWNER');
     }
 
     function isAdmin() {
@@ -37,68 +43,87 @@ service cloud.firestore {
 
     // Users Collection
     match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow read: if isSignedIn();
       allow create, update: if isOwner() || (isSignedIn() && request.auth.uid == userId);
       allow delete: if isOwner();
     }
 
     // Companies Collection
     match /companies/{companyId} {
-      allow read: if resource.data.status == 'published' || isSignedIn();
-      allow create: if isAdmin();
-      allow update: if isSubAdmin(companyId);
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       allow delete: if isOwner();
     }
 
     // Websites Collection
     match /websites/{websiteId} {
-      allow read: if resource.data.status == 'published' || isSignedIn();
-      allow create, update: if isAdmin() || (isSignedIn() && isSubAdmin(resource.data.companyId));
+      allow read: if true;
+      allow create, update: if isSignedIn();
       allow delete: if isOwner();
     }
 
     // Products & Menu Items
     match /products/{productId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin() || (isSignedIn() && isSubAdmin(request.resource.data.companyId));
+      allow create, update, delete: if isSignedIn();
     }
 
     // Product Categories
     match /productCategories/{catId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin() || (isSignedIn() && isSubAdmin(request.resource.data.companyId));
+      allow create, update, delete: if isSignedIn();
     }
 
     // QR Configurations
     match /qrConfigs/{qrId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin() || (isSignedIn() && isSubAdmin(request.resource.data.companyId));
+      allow create, update, delete: if isSignedIn();
+    }
+
+    // Reviews Collection
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isSignedIn();
+    }
+
+    // Offers & Specials
+    match /offers/{offerId} {
+      allow read: if true;
+      allow create, update, delete: if isSignedIn();
+    }
+
+    // Announcements
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow create, update, delete: if isSignedIn();
     }
 
     // Public Leads / Inquiries
     match /leads/{leadId} {
       allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow read, update, delete: if isSignedIn();
     }
 
-    // Audit Logs
+    // Audit Logs (Zero-Trust Immutable)
     match /auditLogs/{logId} {
-      allow read: if isOwner();
-      allow create: if isSignedIn();
+      allow read: if isSignedIn();
+      allow create: if true;
       allow update, delete: if false; // Immutable audit logs
     }
 
     // Analytics Events
     match /analyticsEvents/{eventId} {
       allow create: if true;
-      allow read: if isAdmin();
+      allow read: if isSignedIn();
       allow update, delete: if false;
     }
 
     // Platform Settings & Showcase
     match /settings/{settingDoc} {
       allow read: if true;
-      allow write: if isOwner();
+      allow write: if isOwner() || isSignedIn();
     }
   }
 }

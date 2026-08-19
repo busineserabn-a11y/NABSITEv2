@@ -10,6 +10,7 @@ import {
   Auth,
 } from 'firebase/auth';
 import { initializeFirestore, getFirestore, Firestore } from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 const metaEnv = (import.meta as any).env || {};
 
@@ -60,6 +61,16 @@ try {
 }
 
 export const db: Firestore = firestoreInstance;
+
+let storageInstance: FirebaseStorage;
+try {
+  storageInstance = getStorage(app);
+} catch {
+  // Graceful fallback
+  storageInstance = null as any;
+}
+
+export const storage: FirebaseStorage = storageInstance;
 
 export {
   signInWithEmailAndPassword,

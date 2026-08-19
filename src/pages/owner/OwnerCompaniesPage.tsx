@@ -50,6 +50,8 @@ export const OwnerCompaniesPage: React.FC = () => {
   const [createStep, setCreateStep] = useState<number>(1);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createdResult, setCreatedResult] = useState<Company | null>(null);
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -166,42 +168,48 @@ export const OwnerCompaniesPage: React.FC = () => {
     }
   };
 
+  const resetCreateForm = () => {
+    setForm({
+      name: '',
+      shortName: '',
+      logo: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=200&auto=format&fit=crop&q=80',
+      coverImage: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=1200&auto=format&fit=crop&q=80',
+      category: 'Restaurant',
+      shortDescription: '',
+      phone: '+251 911 000 000',
+      email: '',
+      telegram: '',
+      websiteUrl: '',
+      address: 'Bole Road, Mega Building 4th Floor',
+      city: 'Addis Ababa',
+      mapLink: 'https://maps.google.com/?q=Addis+Ababa',
+      openingHours: 'Mon - Sun: 8:00 AM - 10:00 PM',
+      templateId: 'tpl_restaurant_signature',
+      websiteType: 'menu_and_showcase',
+      features: ['feature_store', 'feature_reviews', 'feature_hours', 'feature_location', 'feature_call', 'feature_telegram'],
+      assignedAdminId: '',
+      status: 'active',
+    });
+    setCreatedResult(null);
+    setCreateError(null);
+    setCreateStep(1);
+  };
+
   const handleCreateCompany = async (e: React.FormEvent, initialStatus: 'active' | 'draft' = 'active') => {
     if (e) e.preventDefault();
     if (!form.name || !form.category) return;
     setActionLoading(true);
+    setCreateError(null);
     try {
-      await api.createCompany({
+      const created = await api.createCompany({
         ...form,
         status: initialStatus,
       });
-      setCreateModalOpen(false);
-      setCreateStep(1);
-      // Reset form
-      setForm({
-        name: '',
-        shortName: '',
-        logo: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=200&auto=format&fit=crop&q=80',
-        coverImage: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=1200&auto=format&fit=crop&q=80',
-        category: 'Restaurant',
-        shortDescription: '',
-        phone: '+251 911 000 000',
-        email: '',
-        telegram: '',
-        websiteUrl: '',
-        address: 'Bole Road, Mega Building 4th Floor',
-        city: 'Addis Ababa',
-        mapLink: 'https://maps.google.com/?q=Addis+Ababa',
-        openingHours: 'Mon - Sun: 8:00 AM - 10:00 PM',
-        templateId: 'tpl_restaurant_signature',
-        websiteType: 'menu_and_showcase',
-        features: ['feature_store', 'feature_reviews', 'feature_hours', 'feature_location', 'feature_call', 'feature_telegram'],
-        assignedAdminId: '',
-        status: 'active',
-      });
+      setCreatedResult(created);
       await fetchData();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Company creation failed:', err);
+      setCreateError(err.message || 'Failed to create company. Please check your connection and try again.');
     } finally {
       setActionLoading(false);
     }
@@ -504,385 +512,487 @@ export const OwnerCompaniesPage: React.FC = () => {
       {/* Structured Multi-Section Provision Company Modal */}
       <Modal
         isOpen={createModalOpen}
-        onClose={() => setCreateModalOpen(false)}
+        onClose={() => {
+          setCreateModalOpen(false);
+          if (createdResult) resetCreateForm();
+        }}
         maxWidth="3xl"
-        title="Provision New Commercial Company"
-        description="Configure identity, communications, location, website template, and assign administrative control in one cohesive workflow."
+        title={createdResult ? "Company Provisioned Successfully" : "Provision New Commercial Company"}
+        description={
+          createdResult
+            ? "Your company entity, website layout, and QR system are now persisted in Cloud Firestore."
+            : "Configure identity, communications, location, website template, and assign administrative control in one cohesive workflow."
+        }
       >
-        <div className="space-y-6">
-          {/* Step Navigation Pills */}
-          <div className="grid grid-cols-4 gap-2 border-b border-slate-200 dark:border-slate-800 pb-4">
-            {[
-              { num: 1, title: 'Identity', icon: Building2 },
-              { num: 2, title: 'Contact & Location', icon: MapPin },
-              { num: 3, title: 'Template & Features', icon: Layout },
-              { num: 4, title: 'Publishing', icon: Shield },
-            ].map((s) => (
-              <button
-                key={s.num}
-                type="button"
-                onClick={() => setCreateStep(s.num)}
-                className={`flex items-center gap-2 p-2.5 rounded-xl text-xs font-bold transition-all text-left ${
-                  createStep === s.num
-                    ? 'bg-amber-500 text-slate-950 shadow-xs'
-                    : 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
-                }`}
+        {createdResult ? (
+          <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black">
+                  <CheckCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                      {createdResult.name}
+                    </h3>
+                    <Badge variant="emerald" size="sm">
+                      {createdResult.status.toUpperCase()}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Category: <span className="font-bold text-slate-700 dark:text-slate-200">{createdResult.category}</span> | Slug: <span className="font-mono text-amber-500">{createdResult.slug}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs">
+                <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                  <span className="text-slate-400">Live Website URL:</span>
+                  <p className="font-mono font-bold text-slate-900 dark:text-white truncate mt-0.5">
+                    /c/{createdResult.slug}
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                  <span className="text-slate-400">Firestore Entity ID:</span>
+                  <p className="font-mono font-bold text-slate-900 dark:text-white truncate mt-0.5">
+                    {createdResult.id}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Link to={`/c/${createdResult.slug}`} className="w-full">
+                <Button variant="primary" size="md" className="w-full font-bold flex items-center justify-center gap-2">
+                  <Globe className="w-4 h-4" />
+                  <span>View Live Site</span>
+                </Button>
+              </Link>
+
+              <Link to={`/studio/${createdResult.websiteId || createdResult.id}`} className="w-full">
+                <Button variant="outline" size="md" className="w-full font-bold flex items-center justify-center gap-2">
+                  <Sliders className="w-4 h-4" />
+                  <span>Studio Customizer</span>
+                </Button>
+              </Link>
+
+              <Link to={`/mastermind/companies/${createdResult.id}`} className="w-full">
+                <Button variant="secondary" size="md" className="w-full font-bold flex items-center justify-center gap-2">
+                  <Eye className="w-4 h-4" />
+                  <span>Manage Entity</span>
+                </Button>
+              </Link>
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
+              <Button
+                variant="ghost"
+                size="md"
+                onClick={() => {
+                  resetCreateForm();
+                  setCreateModalOpen(false);
+                }}
               >
-                <s.icon className="w-4 h-4 shrink-0" />
-                <div className="truncate">
-                  <p className="text-[10px] uppercase font-mono opacity-70">Step {s.num}</p>
-                  <p className="truncate leading-none">{s.title}</p>
-                </div>
-              </button>
-            ))}
+                Close Window
+              </Button>
+              <Button
+                variant="gold"
+                size="md"
+                onClick={resetCreateForm}
+                icon={Plus}
+                className="font-bold shadow-md"
+              >
+                Provision Another Company
+              </Button>
+            </div>
           </div>
-
-          {/* Section 1: Company Identity */}
-          {createStep === 1 && (
-            <div className="space-y-5 animate-in fade-in duration-150">
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-4">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase tracking-wider">
-                  <Building2 className="w-4 h-4" /> 1. Company Identity & Branding
+        ) : (
+          <div className="space-y-6">
+            {createError && (
+              <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <div className="flex-1">
+                  <p className="font-bold">Provisioning Failed</p>
+                  <p className="mt-0.5 text-rose-300/80">{createError}</p>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Company Full Legal Name"
-                    required
-                    placeholder="e.g. Lucy Ethiopian Coffee Roastery & Lounge"
-                    value={form.name}
-                    onChange={(e) => handleNameChange(e.target.value)}
-                  />
-                  <Input
-                    label="Short Name (for buttons & stands)"
-                    placeholder="e.g. Lucy Coffee"
-                    value={form.shortName}
-                    onChange={(e) => setForm({ ...form, shortName: e.target.value })}
-                    helperText="Displayed in compact headers, badges, and QR stand cards."
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Category Dropdown using rich Select component */}
-                  <Select
-                    label="Primary Business Category"
-                    required
-                    options={BUSINESS_CATEGORIES.map((cat) => ({
-                      value: cat,
-                      label: cat,
-                      description: `Category templates and features for ${cat}`,
-                    }))}
-                    value={form.category}
-                    onChange={handleCategoryChange}
-                  />
-
-                  <Input
-                    label="Logo Image URL"
-                    placeholder="https://... logo.png"
-                    value={form.logo}
-                    onChange={(e) => setForm({ ...form, logo: e.target.value })}
-                  />
-                </div>
-
-                <Input
-                  label="Cover Hero Banner URL"
-                  placeholder="https://... cover.jpg"
-                  value={form.coverImage}
-                  onChange={(e) => setForm({ ...form, coverImage: e.target.value })}
-                />
-
-                <Textarea
-                  label="Description / Tagline"
-                  rows={2}
-                  placeholder="e.g. Specialty single-origin beans, traditional Ethiopian coffee roasting, and artisanal cafe experience."
-                  value={form.shortDescription}
-                  onChange={(e) => setForm({ ...form, shortDescription: e.target.value })}
-                />
               </div>
+            )}
 
-              <div className="flex justify-end">
-                <Button
-                  variant="gold"
-                  size="md"
-                  onClick={() => setCreateStep(2)}
-                  disabled={!form.name}
-                  className="font-bold"
+            {/* Step Navigation Pills */}
+            <div className="grid grid-cols-4 gap-2 border-b border-slate-200 dark:border-slate-800 pb-4">
+              {[
+                { num: 1, title: 'Identity', icon: Building2 },
+                { num: 2, title: 'Contact & Location', icon: MapPin },
+                { num: 3, title: 'Template & Features', icon: Layout },
+                { num: 4, title: 'Publishing', icon: Shield },
+              ].map((s) => (
+                <button
+                  key={s.num}
+                  type="button"
+                  onClick={() => setCreateStep(s.num)}
+                  className={`flex items-center gap-2 p-2.5 rounded-xl text-xs font-bold transition-all text-left ${
+                    createStep === s.num
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                  }`}
                 >
-                  Continue to Contact & Location <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
+                  <s.icon className="w-4 h-4 shrink-0" />
+                  <div className="truncate">
+                    <p className="text-[10px] uppercase font-mono opacity-70">Step {s.num}</p>
+                    <p className="truncate leading-none">{s.title}</p>
+                  </div>
+                </button>
+              ))}
             </div>
-          )}
 
-          {/* Section 2: Contact & Location */}
-          {createStep === 2 && (
-            <div className="space-y-5 animate-in fade-in duration-150">
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-4">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase tracking-wider">
-                  <Phone className="w-4 h-4" /> 2. Contact & Connectivity
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Phone Number"
-                    icon={Phone}
-                    placeholder="+251 911 000 000"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  />
-                  <Input
-                    label="Direct Email"
-                    icon={Mail}
-                    placeholder="contact@company.et"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Telegram Handle / Channel"
-                    icon={Send}
-                    placeholder="@company_et"
-                    value={form.telegram}
-                    onChange={(e) => setForm({ ...form, telegram: e.target.value })}
-                  />
-                  <Input
-                    label="Custom Domain (Optional)"
-                    icon={Globe}
-                    placeholder="company.et or company.com"
-                    value={form.websiteUrl}
-                    onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-4">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase tracking-wider">
-                  <MapPin className="w-4 h-4" /> Physical Location & Operating Hours
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Street Address / Building"
-                    icon={MapPin}
-                    placeholder="Bole Road, Mega Building 4th Floor"
-                    value={form.address}
-                    onChange={(e) => setForm({ ...form, address: e.target.value })}
-                  />
-                  <Input
-                    label="City / Region"
-                    placeholder="Addis Ababa, Ethiopia"
-                    value={form.city}
-                    onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Google Maps Direct Link"
-                    placeholder="https://maps.google.com/?q=..."
-                    value={form.mapLink}
-                    onChange={(e) => setForm({ ...form, mapLink: e.target.value })}
-                  />
-                  <Input
-                    label="Operating Hours"
-                    icon={Clock}
-                    placeholder="Mon - Sun: 8:00 AM - 10:00 PM"
-                    value={form.openingHours}
-                    onChange={(e) => setForm({ ...form, openingHours: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Button variant="outline" size="md" onClick={() => setCreateStep(1)}>
-                  Back
-                </Button>
-                <Button variant="gold" size="md" onClick={() => setCreateStep(3)} className="font-bold">
-                  Continue to Template & Features <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Section 3: Website Template & Features */}
-          {createStep === 3 && (
-            <div className="space-y-5 animate-in fade-in duration-150">
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-4">
-                <div className="flex items-center justify-between">
+            {/* Section 1: Company Identity */}
+            {createStep === 1 && (
+              <div className="space-y-5 animate-in fade-in duration-150">
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-4">
                   <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase tracking-wider">
-                    <Layout className="w-4 h-4" /> 3. Website Template Selection ({form.category})
+                    <Building2 className="w-4 h-4" /> 1. Company Identity & Branding
                   </div>
-                  <span className="text-xs text-slate-400 font-medium">
-                    {currentCategoryTemplates.length} Bespoke Templates Available
-                  </span>
-                </div>
 
-                {/* Template Selector Dropdown & Grid */}
-                <Select
-                  label="Active Template Binding"
-                  options={currentCategoryTemplates.map((t) => ({
-                    value: t.id,
-                    label: t.name,
-                    description: t.description,
-                  }))}
-                  value={form.templateId}
-                  onChange={(val) => setForm({ ...form, templateId: val })}
-                />
-
-                {/* Selected Template Preview Snapshot */}
-                {(() => {
-                  const selectedTpl = currentCategoryTemplates.find((t) => t.id === form.templateId) || currentCategoryTemplates[0];
-                  return (
-                    <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 flex items-center gap-4">
-                      <div className="w-16 h-12 rounded-lg bg-slate-800 flex items-center justify-center text-amber-400 shrink-0 font-black text-xs border border-slate-700">
-                        {selectedTpl?.name.slice(0, 3).toUpperCase()}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-black text-slate-900 dark:text-white truncate">
-                          {selectedTpl?.name}
-                        </p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1">
-                          {selectedTpl?.description}
-                        </p>
-                      </div>
-                      <Badge variant="emerald" size="sm">
-                        Default Palette
-                      </Badge>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Feature Modules Toggles */}
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase tracking-wider">
-                  <Sparkles className="w-4 h-4" /> Active Interactive Modules
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                  {FEATURE_REGISTRY.map((feat) => {
-                    const isChecked = form.features.includes(feat.id);
-                    return (
-                      <button
-                        key={feat.id}
-                        type="button"
-                        onClick={() => toggleFeature(feat.id)}
-                        className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all ${
-                          isChecked
-                            ? 'bg-amber-500/10 border-amber-500/50 text-amber-900 dark:text-amber-300 shadow-2xs'
-                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
-                        }`}
-                      >
-                        <div
-                          className={`w-4 h-4 rounded-md mt-0.5 flex items-center justify-center shrink-0 border ${
-                            isChecked
-                              ? 'bg-amber-500 border-amber-500 text-slate-950 font-black'
-                              : 'border-slate-300 dark:border-slate-600 bg-transparent'
-                          }`}
-                        >
-                          {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold truncate">{feat.name}</p>
-                          <p className="text-[10px] opacity-70 line-clamp-1">{feat.description}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Button variant="outline" size="md" onClick={() => setCreateStep(2)}>
-                  Back
-                </Button>
-                <Button variant="gold" size="md" onClick={() => setCreateStep(4)} className="font-bold">
-                  Continue to Governance <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Section 4: Governance & Publishing */}
-          {createStep === 4 && (
-            <div className="space-y-5 animate-in fade-in duration-150">
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-4">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase tracking-wider">
-                  <Shield className="w-4 h-4" /> 4. Platform Administration & Role Governance
-                </div>
-
-                <Select
-                  label="Assign Platform Administrator"
-                  options={[
-                    { value: '', label: 'Unassigned (Mastermind Super-Admin only)' },
-                    ...admins.map((a) => ({
-                      value: a.id,
-                      label: `${a.name} (${a.email})`,
-                      description: `Role: ${a.role}`,
-                    })),
-                  ]}
-                  value={form.assignedAdminId}
-                  onChange={(val) => setForm({ ...form, assignedAdminId: val })}
-                  helperText="The assigned administrator can edit products, reviews, and company settings."
-                />
-
-                <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
-                    Provision Summary
-                  </span>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <span className="text-slate-400">Entity:</span>{' '}
-                      <span className="font-bold text-slate-900 dark:text-white">{form.name}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Category:</span>{' '}
-                      <span className="font-bold text-slate-900 dark:text-white">{form.category}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Template:</span>{' '}
-                      <span className="font-bold text-amber-500">{form.templateId}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Modules:</span>{' '}
-                      <span className="font-bold text-emerald-500">{form.features.length} enabled</span>
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input
+                      label="Company Full Legal Name"
+                      required
+                      placeholder="e.g. Lucy Ethiopian Coffee Roastery & Lounge"
+                      value={form.name}
+                      onChange={(e) => handleNameChange(e.target.value)}
+                    />
+                    <Input
+                      label="Short Name (for buttons & stands)"
+                      placeholder="e.g. Lucy Coffee"
+                      value={form.shortName}
+                      onChange={(e) => setForm({ ...form, shortName: e.target.value })}
+                      helperText="Displayed in compact headers, badges, and QR stand cards."
+                    />
                   </div>
-                </div>
-              </div>
 
-              {/* Action Buttons: Save Draft vs Publish Live */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
-                <Button variant="outline" size="md" onClick={() => setCreateStep(3)}>
-                  Back
-                </Button>
-                <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Category Dropdown using rich Select component */}
+                    <Select
+                      label="Primary Business Category"
+                      required
+                      options={BUSINESS_CATEGORIES.map((cat) => ({
+                        value: cat,
+                        label: cat,
+                        description: `Category templates and features for ${cat}`,
+                      }))}
+                      value={form.category}
+                      onChange={handleCategoryChange}
+                    />
+
+                    <Input
+                      label="Logo Image URL"
+                      placeholder="https://... logo.png"
+                      value={form.logo}
+                      onChange={(e) => setForm({ ...form, logo: e.target.value })}
+                    />
+                  </div>
+
+                  <Input
+                    label="Cover Hero Banner URL"
+                    placeholder="https://... cover.jpg"
+                    value={form.coverImage}
+                    onChange={(e) => setForm({ ...form, coverImage: e.target.value })}
+                  />
+
+                  <Textarea
+                    label="Description / Tagline"
+                    rows={2}
+                    placeholder="e.g. Specialty single-origin beans, traditional Ethiopian coffee roasting, and artisanal cafe experience."
+                    value={form.shortDescription}
+                    onChange={(e) => setForm({ ...form, shortDescription: e.target.value })}
+                  />
+                </div>
+
+                <div className="flex justify-end">
                   <Button
-                    type="button"
-                    variant="secondary"
-                    size="md"
-                    disabled={actionLoading}
-                    onClick={(e) => handleCreateCompany(e, 'draft')}
-                    className="font-bold"
-                  >
-                    Save as Draft
-                  </Button>
-                  <Button
-                    type="button"
                     variant="gold"
                     size="md"
-                    disabled={actionLoading}
-                    onClick={(e) => handleCreateCompany(e, 'active')}
-                    className="font-black shadow-md"
+                    onClick={() => setCreateStep(2)}
+                    disabled={!form.name}
+                    className="font-bold"
                   >
-                    {actionLoading ? 'Provisioning...' : 'Provision & Publish Live'}
+                    Continue to Contact & Location <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+
+            {/* Section 2: Contact & Location */}
+            {createStep === 2 && (
+              <div className="space-y-5 animate-in fade-in duration-150">
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-4">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase tracking-wider">
+                    <Phone className="w-4 h-4" /> 2. Contact & Connectivity
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input
+                      label="Phone Number"
+                      icon={Phone}
+                      placeholder="+251 911 000 000"
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    />
+                    <Input
+                      label="Direct Email"
+                      icon={Mail}
+                      placeholder="contact@company.et"
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input
+                      label="Telegram Handle / Channel"
+                      icon={Send}
+                      placeholder="@company_et"
+                      value={form.telegram}
+                      onChange={(e) => setForm({ ...form, telegram: e.target.value })}
+                    />
+                    <Input
+                      label="Custom Domain (Optional)"
+                      icon={Globe}
+                      placeholder="company.et or company.com"
+                      value={form.websiteUrl}
+                      onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-4">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase tracking-wider">
+                    <MapPin className="w-4 h-4" /> Physical Location & Operating Hours
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input
+                      label="Street Address / Building"
+                      icon={MapPin}
+                      placeholder="Bole Road, Mega Building 4th Floor"
+                      value={form.address}
+                      onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    />
+                    <Input
+                      label="City / Region"
+                      placeholder="Addis Ababa, Ethiopia"
+                      value={form.city}
+                      onChange={(e) => setForm({ ...form, city: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input
+                      label="Google Maps Direct Link"
+                      placeholder="https://maps.google.com/?q=..."
+                      value={form.mapLink}
+                      onChange={(e) => setForm({ ...form, mapLink: e.target.value })}
+                    />
+                    <Input
+                      label="Operating Hours"
+                      icon={Clock}
+                      placeholder="Mon - Sun: 8:00 AM - 10:00 PM"
+                      value={form.openingHours}
+                      onChange={(e) => setForm({ ...form, openingHours: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Button variant="outline" size="md" onClick={() => setCreateStep(1)}>
+                    Back
+                  </Button>
+                  <Button variant="gold" size="md" onClick={() => setCreateStep(3)} className="font-bold">
+                    Continue to Template & Features <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Section 3: Website Template & Features */}
+            {createStep === 3 && (
+              <div className="space-y-5 animate-in fade-in duration-150">
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase tracking-wider">
+                      <Layout className="w-4 h-4" /> 3. Website Template Selection ({form.category})
+                    </div>
+                    <span className="text-xs text-slate-400 font-medium">
+                      {currentCategoryTemplates.length} Bespoke Templates Available
+                    </span>
+                  </div>
+
+                  {/* Template Selector Dropdown & Grid */}
+                  <Select
+                    label="Active Template Binding"
+                    options={currentCategoryTemplates.map((t) => ({
+                      value: t.id,
+                      label: t.name,
+                      description: t.description,
+                    }))}
+                    value={form.templateId}
+                    onChange={(val) => setForm({ ...form, templateId: val })}
+                  />
+
+                  {/* Selected Template Preview Snapshot */}
+                  {(() => {
+                    const selectedTpl = currentCategoryTemplates.find((t) => t.id === form.templateId) || currentCategoryTemplates[0];
+                    return (
+                      <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 flex items-center gap-4">
+                        <div className="w-16 h-12 rounded-lg bg-slate-800 flex items-center justify-center text-amber-400 shrink-0 font-black text-xs border border-slate-700">
+                          {selectedTpl?.name.slice(0, 3).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-black text-slate-900 dark:text-white truncate">
+                            {selectedTpl?.name}
+                          </p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1">
+                            {selectedTpl?.description}
+                          </p>
+                        </div>
+                        <Badge variant="emerald" size="sm">
+                          Default Palette
+                        </Badge>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Feature Modules Toggles */}
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase tracking-wider">
+                    <Sparkles className="w-4 h-4" /> Active Interactive Modules
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {FEATURE_REGISTRY.map((feat) => {
+                      const isChecked = form.features.includes(feat.id);
+                      return (
+                        <button
+                          key={feat.id}
+                          type="button"
+                          onClick={() => toggleFeature(feat.id)}
+                          className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all ${
+                            isChecked
+                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-900 dark:text-amber-300 shadow-2xs'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                          }`}
+                        >
+                          <div
+                            className={`w-4 h-4 rounded-md mt-0.5 flex items-center justify-center shrink-0 border ${
+                              isChecked
+                                ? 'bg-amber-500 border-amber-500 text-slate-950 font-black'
+                                : 'border-slate-300 dark:border-slate-600 bg-transparent'
+                            }`}
+                          >
+                            {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold truncate">{feat.name}</p>
+                            <p className="text-[10px] opacity-70 line-clamp-1">{feat.description}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Button variant="outline" size="md" onClick={() => setCreateStep(2)}>
+                    Back
+                  </Button>
+                  <Button variant="gold" size="md" onClick={() => setCreateStep(4)} className="font-bold">
+                    Continue to Governance <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Section 4: Governance & Publishing */}
+            {createStep === 4 && (
+              <div className="space-y-5 animate-in fade-in duration-150">
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-4">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase tracking-wider">
+                    <Shield className="w-4 h-4" /> 4. Platform Administration & Role Governance
+                  </div>
+
+                  <Select
+                    label="Assign Platform Administrator"
+                    options={[
+                      { value: '', label: 'Unassigned (Mastermind Super-Admin only)' },
+                      ...admins.map((a) => ({
+                        value: a.id,
+                        label: `${a.name} (${a.email})`,
+                        description: `Role: ${a.role}`,
+                      })),
+                    ]}
+                    value={form.assignedAdminId}
+                    onChange={(val) => setForm({ ...form, assignedAdminId: val })}
+                    helperText="The assigned administrator can edit products, reviews, and company settings."
+                  />
+
+                  <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+                      Provision Summary
+                    </span>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-slate-400">Entity:</span>{' '}
+                        <span className="font-bold text-slate-900 dark:text-white">{form.name}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Category:</span>{' '}
+                        <span className="font-bold text-slate-900 dark:text-white">{form.category}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Template:</span>{' '}
+                        <span className="font-bold text-amber-500">{form.templateId}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Modules:</span>{' '}
+                        <span className="font-bold text-emerald-500">{form.features.length} enabled</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons: Save Draft vs Publish Live */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <Button variant="outline" size="md" onClick={() => setCreateStep(3)}>
+                    Back
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="md"
+                      disabled={actionLoading}
+                      onClick={(e) => handleCreateCompany(e, 'draft')}
+                      className="font-bold"
+                    >
+                      Save as Draft
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="gold"
+                      size="md"
+                      disabled={actionLoading}
+                      onClick={(e) => handleCreateCompany(e, 'active')}
+                      className="font-black shadow-md"
+                    >
+                      {actionLoading ? 'Provisioning in Firestore...' : 'Provision & Publish Live'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* Confirmation Modal */}

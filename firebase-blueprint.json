@@ -2,205 +2,193 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "Authenticated platform user with role and permissions",
+      "description": "User profile with role-based access control and company assignments",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "email": { "type": "string", "format": "email" },
-        "fullName": { "type": "string" },
-        "role": { "type": "string", "enum": ["OWNER", "ADMIN", "SUB_ADMIN"] },
-        "assignedCompanyIds": { "type": "array" },
-        "permissions": { "type": "array" },
-        "avatarUrl": { "type": "string" },
-        "phone": { "type": "string" },
-        "isActive": { "type": "boolean" },
-        "createdAt": { "type": "string" },
-        "lastLoginAt": { "type": "string" }
+        "id": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "name": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["OWNER", "ADMIN", "SUB_ADMIN", "STAFF"] },
+        "status": { "type": "string", "enum": ["active", "suspended", "disabled"] },
+        "assignedCompanyId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["email", "fullName", "role"]
+      "required": ["id", "email", "name", "role", "status"]
     },
     "Company": {
       "title": "Company",
-      "description": "A registered commercial business on NABSITE",
+      "description": "Enterprise digital identity record and metadata",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "slug": { "type": "string" },
-        "category": { "type": "string" },
-        "status": { "type": "string", "enum": ["draft", "published", "suspended", "archived"] },
-        "phone": { "type": "string" },
-        "email": { "type": "string" },
-        "address": { "type": "string" },
-        "city": { "type": "string" },
-        "logo": { "type": "string" },
-        "coverImage": { "type": "string" },
-        "shortDescription": { "type": "string" },
-        "websiteId": { "type": "string" },
-        "createdAt": { "type": "string" },
-        "updatedAt": { "type": "string" }
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "slug": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["draft", "active", "published", "suspended", "archived"] },
+        "phone": { "type": "string", "maxLength": 64 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "address": { "type": "string", "maxLength": 256 },
+        "city": { "type": "string", "maxLength": 64 },
+        "logo": { "type": "string", "maxLength": 2048 },
+        "coverImage": { "type": "string", "maxLength": 2048 },
+        "shortDescription": { "type": "string", "maxLength": 512 },
+        "websiteId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["name", "slug", "category", "status"]
+      "required": ["id", "name", "slug", "category", "status"]
     },
     "Website": {
       "title": "Website",
-      "description": "Website structure and design configuration for a company",
+      "description": "Full website layout, theme, navigation, pages, and components",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "companyId": { "type": "string" },
-        "templateId": { "type": "string" },
-        "themeId": { "type": "string" },
-        "status": { "type": "string", "enum": ["draft", "published"] },
-        "draftConfig": { "type": "object" },
-        "publishedConfig": { "type": "object" },
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "templateId": { "type": "string", "maxLength": 128 },
+        "themeId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["draft", "published", "archived"] },
         "version": { "type": "number" },
-        "updatedAt": { "type": "string" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["companyId", "templateId", "status"]
+      "required": ["id", "companyId", "status"]
     },
     "Product": {
       "title": "Product",
-      "description": "A menu item or product offering for a company",
+      "description": "Product or menu item belonging to a company",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "companyId": { "type": "string" },
-        "categoryId": { "type": "string" },
-        "name": { "type": "string" },
-        "description": { "type": "string" },
-        "price": { "type": "string" },
-        "currency": { "type": "string" },
-        "image": { "type": "string" },
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "categoryId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 1024 },
+        "price": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 8 },
+        "image": { "type": "string", "maxLength": 2048 },
         "isAvailable": { "type": "boolean" },
         "isFeatured": { "type": "boolean" },
-        "tags": { "type": "array" },
-        "sortOrder": { "type": "number" }
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["companyId", "name", "price"]
+      "required": ["id", "companyId", "name", "price"]
     },
     "ProductCategory": {
       "title": "ProductCategory",
-      "description": "Category for digital menu or catalog",
+      "description": "Category for organizing company products/menu items",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "companyId": { "type": "string" },
-        "name": { "type": "string" },
-        "slug": { "type": "string" },
-        "sortOrder": { "type": "number" }
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 512 },
+        "order": { "type": "number" }
       },
-      "required": ["companyId", "name"]
+      "required": ["id", "companyId", "name"]
     },
     "QrConfig": {
       "title": "QrConfig",
-      "description": "QR code stand design and target URL configuration",
+      "description": "Configured QR code branding, color, size, and destination",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "companyId": { "type": "string" },
-        "targetUrl": { "type": "string" },
-        "title": { "type": "string" },
-        "caption": { "type": "string" },
-        "fgColor": { "type": "string" },
-        "bgColor": { "type": "string" },
-        "size": { "type": "number" },
-        "margin": { "type": "number" },
-        "frameStyle": { "type": "string" },
-        "scanCount": { "type": "number" },
-        "createdAt": { "type": "string" }
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "targetUrl": { "type": "string", "maxLength": 2048 },
+        "title": { "type": "string", "maxLength": 128 },
+        "frame": { "type": "string", "maxLength": 64 },
+        "fgColor": { "type": "string", "maxLength": 32 },
+        "bgColor": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["targetUrl"]
+      "required": ["id", "companyId", "targetUrl"]
     },
     "Lead": {
       "title": "Lead",
-      "description": "Lead application submitted from public landing CTA",
+      "description": "Inquiry or contact submission from public website",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "fullName": { "type": "string" },
-        "companyName": { "type": "string" },
-        "phone": { "type": "string" },
-        "email": { "type": "string" },
-        "category": { "type": "string" },
-        "message": { "type": "string" },
-        "status": { "type": "string" },
-        "createdAt": { "type": "string" }
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "phone": { "type": "string", "maxLength": 64 },
+        "message": { "type": "string", "maxLength": 2048 },
+        "status": { "type": "string", "enum": ["new", "contacted", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["fullName", "companyName", "phone"]
+      "required": ["id", "name", "createdAt"]
     },
     "AuditLog": {
       "title": "AuditLog",
-      "description": "System mutation audit log record",
+      "description": "Immutable security and administrative action record",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "actorId": { "type": "string" },
-        "actorEmail": { "type": "string" },
-        "action": { "type": "string" },
-        "resource": { "type": "string" },
-        "resourceId": { "type": "string" },
-        "metadata": { "type": "object" },
-        "timestamp": { "type": "string" }
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userRole": { "type": "string", "maxLength": 64 },
+        "action": { "type": "string", "maxLength": 128 },
+        "entityType": { "type": "string", "maxLength": 64 },
+        "entityId": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 2048 },
+        "timestamp": { "type": "string", "format": "date-time" }
       },
-      "required": ["action", "timestamp"]
+      "required": ["id", "action", "timestamp"]
     },
     "AnalyticsEvent": {
       "title": "AnalyticsEvent",
-      "description": "Telemetry event for views and interaction tracking",
+      "description": "Tracked page view or interaction metric",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "companyId": { "type": "string" },
-        "websiteId": { "type": "string" },
-        "eventType": { "type": "string" },
-        "path": { "type": "string" },
-        "timestamp": { "type": "string" },
-        "metadata": { "type": "object" }
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "maxLength": 64 },
+        "path": { "type": "string", "maxLength": 512 },
+        "timestamp": { "type": "string", "format": "date-time" }
       },
-      "required": ["eventType", "timestamp"]
+      "required": ["id", "type", "timestamp"]
     }
   },
   "firestore": {
     "/users/{userId}": {
-      "entity": "User",
-      "description": "User profiles indexed by UID"
+      "schema": "User",
+      "description": "User profiles and RBAC credentials"
     },
     "/companies/{companyId}": {
-      "entity": "Company",
-      "description": "Registered commercial businesses"
+      "schema": "Company",
+      "description": "Enterprise directory and company settings"
     },
     "/websites/{websiteId}": {
-      "entity": "Website",
-      "description": "Website configurations"
+      "schema": "Website",
+      "description": "Website configurations, draft and published states"
     },
     "/products/{productId}": {
-      "entity": "Product",
-      "description": "Menu items and product catalog"
+      "schema": "Product",
+      "description": "Products and digital menu offerings"
     },
     "/productCategories/{catId}": {
-      "entity": "ProductCategory",
-      "description": "Menu categories"
+      "schema": "ProductCategory",
+      "description": "Product categories by company"
     },
     "/qrConfigs/{qrId}": {
-      "entity": "QrConfig",
-      "description": "QR Code configurations"
+      "schema": "QrConfig",
+      "description": "Saved QR codes and branding assets"
     },
     "/leads/{leadId}": {
-      "entity": "Lead",
-      "description": "Direct commercial lead inquiries"
+      "schema": "Lead",
+      "description": "Public inquiries submitted through company pages"
     },
     "/auditLogs/{logId}": {
-      "entity": "AuditLog",
-      "description": "Platform audit log records"
+      "schema": "AuditLog",
+      "description": "Audit trail of mutations and administrative actions"
     },
     "/analyticsEvents/{eventId}": {
-      "entity": "AnalyticsEvent",
-      "description": "Real platform analytics telemetry"
+      "schema": "AnalyticsEvent",
+      "description": "Real analytics events and metrics"
     },
     "/settings/{settingDoc}": {
-      "entity": "PlatformSettings",
-      "description": "Platform settings and showcase settings"
+      "schema": { "$ref": "PlatformSettings" },
+      "description": "Global platform configurations and feature registries"
     }
   }
 }
