@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   auth,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -157,18 +158,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Please provide both email and password.');
     }
 
+    const trimmedEmail = email.trim().toLowerCase();
+    const isPrimaryOwner =
+      trimmedEmail === 'abenezarofficial1@gmail.com' ||
+      trimmedEmail === 'busineser.abn@gmail.com' ||
+      trimmedEmail === 'owner@nabsite.io' ||
+      trimmedEmail === 'owner@nabsite.et';
+
     try {
-      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+      let cred;
+      try {
+        cred = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+      } catch (signInErr: any) {
+        // If this is an authorized platform owner logging in for the first time in a new Firebase project
+        if (
+          isPrimaryOwner &&
+          (signInErr.code === 'auth/user-not-found' ||
+            signInErr.code === 'auth/invalid-credential' ||
+            signInErr.message?.includes('user-not-found') ||
+            signInErr.message?.includes('invalid-credential'))
+        ) {
+          try {
+            // Auto-provision initial root owner account in Firebase Auth
+            cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+          } catch {
+            throw signInErr;
+          }
+        } else {
+          throw signInErr;
+        }
+      }
+
       const uid = cred.user.uid;
 
       // Fetch role & status from Firestore
       const userRef = doc(firestoreDb, 'users', uid);
       const userSnap = await getDoc(userRef);
-
-      const isPrimaryOwner =
-        cred.user.email?.toLowerCase() === 'busineser.abn@gmail.com' ||
-        cred.user.email?.toLowerCase() === 'abenezarofficial1@gmail.com' ||
-        cred.user.email?.toLowerCase() === 'owner@nabsite.io';
 
       let userData: User;
 
@@ -181,11 +206,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         userData = {
           id: uid,
-          email: cred.user.email || email.trim(),
-          name: cred.user.displayName || email.split('@')[0],
+          email: cred.user.email || trimmedEmail,
+          name: isPrimaryOwner ? 'Abenezar (Mastermind)' : cred.user.displayName || email.split('@')[0],
           role: isPrimaryOwner ? 'OWNER' : 'ADMIN',
           assignedCompanyIds: [],
-          permissions: [],
+          permissions: isPrimaryOwner ? (['all'] as any) : [],
           status: 'active',
           createdAt: new Date().toISOString(),
           lastLoginAt: new Date().toISOString(),
@@ -209,9 +234,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const ownerLogin = async (email: string, password?: string): Promise<User> => {
     const loggedUser = await login(email, password);
     const isPrimaryOwner =
-      email.trim().toLowerCase() === 'busineser.abn@gmail.com' ||
       email.trim().toLowerCase() === 'abenezarofficial1@gmail.com' ||
-      email.trim().toLowerCase() === 'owner@nabsite.io';
+      email.trim().toLowerCase() === 'busineser.abn@gmail.com' ||
+      email.trim().toLowerCase() === 'owner@nabsite.io' ||
+      email.trim().toLowerCase() === 'owner@nabsite.et';
 
     if (loggedUser.role !== 'OWNER' && !isPrimaryOwner) {
       await signOut(auth);

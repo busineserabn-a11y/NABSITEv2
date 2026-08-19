@@ -19,29 +19,39 @@ import { Company, Website } from '../../types';
 import { Card, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+} from 'recharts';
+import { TrendingUp } from 'lucide-react';
 
 export const CompanyHubPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [company, setCompany] = useState<Company | null>(null);
   const [website, setWebsite] = useState<Website | null>(null);
+  const [chartData, setChartData] = useState<{ date: string; views: number; scans: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    api.getCompanyWebsite(id)
-      .then((data: any) => {
-        setCompany(data.company || data);
-        setWebsite(data.website || null);
+    Promise.all([
+      api.getCompanyWebsite(id).catch(async () => {
+        const comp = await api.getCompany(id);
+        return { company: comp, website: null };
+      }),
+      api.getAnalyticsTimeSeries(id).catch(() => ({ dailyViews: [] })),
+    ])
+      .then(([webData, series]) => {
+        setCompany((webData as any).company || webData);
+        setWebsite((webData as any).website || null);
+        setChartData((series as any).dailyViews || []);
       })
-      .catch(async () => {
-        try {
-          const comp = await api.getCompany(id);
-          setCompany((comp as any).company || comp);
-        } catch (e) {
-          console.error(e);
-        }
-      })
+      .catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -89,6 +99,59 @@ export const CompanyHubPage: React.FC = () => {
           </Link>
         </div>
       </div>
+
+      {/* Engagement Graph */}
+      <Card variant="bordered" padding="md" className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-amber-500" />
+              Live Visitor & QR Stand Traffic (Last 7 Days)
+            </h3>
+            <p className="text-xs text-slate-500">Real-time page views and menu scans recorded for {company.name}</p>
+          </div>
+          <div className="flex items-center gap-4 text-xs font-semibold">
+            <span className="flex items-center gap-1.5 text-amber-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+              Page Views
+            </span>
+            <span className="flex items-center gap-1.5 text-cyan-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" />
+              QR Scans
+            </span>
+          </div>
+        </div>
+
+        <div className="h-48 w-full pt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="compViews" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.0} />
+                </linearGradient>
+                <linearGradient id="compScans" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="date" stroke="#94A3B8" fontSize={11} tickLine={false} />
+              <YAxis stroke="#94A3B8" fontSize={11} tickLine={false} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#0F172A',
+                  borderColor: '#334155',
+                  borderRadius: '12px',
+                  color: '#FFF',
+                  fontSize: '12px',
+                }}
+              />
+              <Area type="monotone" dataKey="views" name="Page Views" stroke="#F59E0B" strokeWidth={2} fillOpacity={1} fill="url(#compViews)" />
+              <Area type="monotone" dataKey="scans" name="QR Scans" stroke="#06B6D4" strokeWidth={2} fillOpacity={1} fill="url(#compScans)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
 
       {/* Module Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -36,6 +36,19 @@ import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { CompanyName } from '../../components/ui/CompanyName';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
 
 export const OwnerOverviewPage: React.FC = () => {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -45,6 +58,15 @@ export const OwnerOverviewPage: React.FC = () => {
     totalViews: 0,
     totalScans: 0,
     totalLeads: 0,
+  });
+  const [chartData, setChartData] = useState<{
+    dailyViews: { date: string; views: number; scans: number }[];
+    categoryBreakdown: { category: string; count: number }[];
+    deviceBreakdown: { name: string; value: number }[];
+  }>({
+    dailyViews: [],
+    categoryBreakdown: [],
+    deviceBreakdown: [],
   });
   const [loading, setLoading] = useState(true);
 
@@ -70,16 +92,18 @@ export const OwnerOverviewPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [comps, lds, logs, tele] = await Promise.all([
+      const [comps, lds, logs, tele, series] = await Promise.all([
         api.getCompanies().catch(() => []),
         api.getLeads().catch(() => []),
         api.getAuditLogs().catch(() => []),
         api.getAnalyticsSummary().catch(() => ({ totalViews: 0, totalScans: 0, totalLeads: 0 })),
+        api.getAnalyticsTimeSeries().catch(() => ({ dailyViews: [], categoryBreakdown: [], deviceBreakdown: [] })),
       ]);
       setCompanies(comps || []);
       setLeads(lds || []);
       setAuditLogs((logs || []).slice(0, 10));
       setTelemetry(tele);
+      setChartData(series);
     } catch (err) {
       console.error('Failed to load owner overview data:', err);
     } finally {
@@ -252,6 +276,117 @@ export const OwnerOverviewPage: React.FC = () => {
             <p className="text-[11px] font-medium text-slate-400 mt-1">
               Recorded page & menu views
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 2.5 REAL ANALYTICS & TELEMETRY CHARTS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Real 7-Day Traffic & QR Scans Trend */}
+        <div className="lg:col-span-2 p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-amber-400" />
+                Live Platform Engagement (Last 7 Days)
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Real-time page views and physical QR stand scans recorded in Firestore
+              </p>
+            </div>
+            <div className="flex items-center gap-4 text-xs">
+              <span className="flex items-center gap-1.5 text-amber-400 font-semibold">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+                Page Views
+              </span>
+              <span className="flex items-center gap-1.5 text-cyan-400 font-semibold">
+                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
+                QR Scans
+              </span>
+            </div>
+          </div>
+
+          <div className="h-64 w-full pt-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData.dailyViews} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.0} />
+                  </linearGradient>
+                  <linearGradient id="colorScans" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" stroke="#64748B" fontSize={11} tickLine={false} />
+                <YAxis stroke="#64748B" fontSize={11} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#0F172A',
+                    borderColor: '#334155',
+                    borderRadius: '12px',
+                    color: '#FFF',
+                    fontSize: '12px',
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="views"
+                  name="Page Views"
+                  stroke="#F59E0B"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorViews)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="scans"
+                  name="QR Scans"
+                  stroke="#06B6D4"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorScans)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Category Breakdown Bar Chart */}
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4 flex flex-col justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Layers className="w-4 h-4 text-emerald-400" />
+              Company Categories
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Distribution of registered commercial enterprises
+            </p>
+          </div>
+
+          <div className="h-56 w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData.categoryBreakdown.slice(0, 6)} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <XAxis dataKey="category" stroke="#64748B" fontSize={10} tickLine={false} interval={0} angle={-20} textAnchor="end" height={40} />
+                <YAxis stroke="#64748B" fontSize={11} tickLine={false} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#0F172A',
+                    borderColor: '#334155',
+                    borderRadius: '12px',
+                    color: '#FFF',
+                    fontSize: '12px',
+                  }}
+                />
+                <Bar dataKey="count" name="Companies" fill="#10B981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+            <span>Active Sector Types</span>
+            <span className="font-bold text-emerald-400">{chartData.categoryBreakdown.length} Sectors</span>
           </div>
         </div>
       </div>

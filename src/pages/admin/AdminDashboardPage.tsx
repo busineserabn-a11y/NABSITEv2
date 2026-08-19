@@ -19,18 +19,32 @@ import { Card, CardHeader, CardTitle, CardDescription } from '../../components/u
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { CompanyName } from '../../components/ui/CompanyName';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+} from 'recharts';
 
 export const AdminDashboardPage: React.FC = () => {
   const { user, setSelectedCompanyId } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [chartData, setChartData] = useState<{ date: string; views: number; scans: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([api.getCompanies(), api.getLeads()])
-      .then(([comps, lds]) => {
+    Promise.all([
+      api.getCompanies(),
+      api.getLeads(),
+      api.getAnalyticsTimeSeries(),
+    ])
+      .then(([comps, lds, series]) => {
         setCompanies(comps);
         setLeads(lds);
+        setChartData(series.dailyViews || []);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -85,6 +99,59 @@ export const AdminDashboardPage: React.FC = () => {
           <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">{companies.length}</p>
         </Card>
       </div>
+
+      {/* Real Engagement Graph */}
+      <Card variant="bordered" padding="md" className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-amber-500" />
+              Visitor Traffic & Stand Scans (Last 7 Days)
+            </h3>
+            <p className="text-xs text-slate-500">Real-time aggregate engagement from customer devices</p>
+          </div>
+          <div className="flex items-center gap-4 text-xs font-semibold">
+            <span className="flex items-center gap-1.5 text-amber-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+              Page Views
+            </span>
+            <span className="flex items-center gap-1.5 text-sky-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-sky-500" />
+              QR Scans
+            </span>
+          </div>
+        </div>
+
+        <div className="h-56 w-full pt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="adminViews" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.0} />
+                </linearGradient>
+                <linearGradient id="adminScans" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#0284C7" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#0284C7" stopOpacity={0.0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="date" stroke="#94A3B8" fontSize={11} tickLine={false} />
+              <YAxis stroke="#94A3B8" fontSize={11} tickLine={false} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#0F172A',
+                  borderColor: '#334155',
+                  borderRadius: '12px',
+                  color: '#FFF',
+                  fontSize: '12px',
+                }}
+              />
+              <Area type="monotone" dataKey="views" name="Page Views" stroke="#F59E0B" strokeWidth={2} fillOpacity={1} fill="url(#adminViews)" />
+              <Area type="monotone" dataKey="scans" name="QR Scans" stroke="#0284C7" strokeWidth={2} fillOpacity={1} fill="url(#adminScans)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
 
       {/* Companies List */}
       <Card variant="bordered">

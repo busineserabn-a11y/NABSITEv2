@@ -938,6 +938,85 @@ export const api = {
     }
   },
 
+  getAnalyticsTimeSeries: async (companyId?: string): Promise<{
+    dailyViews: { date: string; views: number; scans: number }[];
+    categoryBreakdown: { category: string; count: number }[];
+    deviceBreakdown: { name: string; value: number }[];
+  }> => {
+    try {
+      const q = companyId
+        ? query(collection(firestoreDb, 'analyticsEvents'), where('companyId', '==', companyId))
+        : collection(firestoreDb, 'analyticsEvents');
+      const eventsSnap = await getDocs(q);
+      const events = eventsSnap.docs.map((d) => d.data() as any);
+
+      // Group by last 7 days
+      const daysMap = new Map<string, { views: number; scans: number }>();
+      const now = new Date();
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(now.getDate() - i);
+        const key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        daysMap.set(key, { views: 0, scans: 0 });
+      }
+
+      events.forEach((ev) => {
+        if (ev.timestamp) {
+          const evDate = new Date(ev.timestamp);
+          const key = evDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          if (daysMap.has(key)) {
+            const current = daysMap.get(key)!;
+            if (ev.eventType === 'qr_scan') {
+              current.scans += 1;
+            } else {
+              current.views += 1;
+            }
+          }
+        }
+      });
+
+      const dailyViews = Array.from(daysMap.entries()).map(([date, counts]) => ({
+        date,
+        views: counts.views,
+        scans: counts.scans,
+      }));
+
+      // Category breakdown from companies collection
+      const compSnap = await getDocs(collection(firestoreDb, 'companies'));
+      const catCounts: Record<string, number> = {};
+      compSnap.docs.forEach((d) => {
+        const cat = d.data().category || 'Restaurant';
+        catCounts[cat] = (catCounts[cat] || 0) + 1;
+      });
+
+      const categoryBreakdown = Object.entries(catCounts).map(([category, count]) => ({
+        category,
+        count,
+      }));
+
+      const deviceBreakdown = [
+        { name: 'Mobile Web', value: Math.max(1, events.filter((e) => e.device === 'mobile').length) },
+        { name: 'Desktop Web', value: Math.max(1, events.filter((e) => e.device === 'desktop').length) },
+        { name: 'Physical QR Scans', value: Math.max(1, events.filter((e) => e.eventType === 'qr_scan').length) },
+      ];
+
+      return { dailyViews, categoryBreakdown, deviceBreakdown };
+    } catch {
+      const now = new Date();
+      const dailyViews = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(now.getDate() - i);
+        dailyViews.push({
+          date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          views: 0,
+          scans: 0,
+        });
+      }
+      return { dailyViews, categoryBreakdown: [], deviceBreakdown: [] };
+    }
+  },
+
   // --- Audit Logs ---
   getAuditLogs: async (): Promise<AuditLog[]> => {
     try {
