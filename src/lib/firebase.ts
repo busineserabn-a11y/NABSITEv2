@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, deleteApp, FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   GoogleAuthProvider,
@@ -73,6 +73,29 @@ try {
 }
 
 export const storage: FirebaseStorage = storageInstance;
+
+/**
+ * Provisions a new user account in Firebase Auth with the given email & password
+ * using an isolated secondary Firebase app instance so the currently logged-in
+ * session (Owner/Admin) is NOT interrupted or logged out.
+ */
+export async function createFirebaseAuthUser(email: string, password: string): Promise<string> {
+  const secondaryAppName = `SecondaryAuth_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+  try {
+    const secondaryAuth = getAuth(secondaryApp);
+    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email.trim().toLowerCase(), password);
+    const uid = userCredential.user.uid;
+    await signOut(secondaryAuth);
+    await deleteApp(secondaryApp);
+    return uid;
+  } catch (err) {
+    try {
+      await deleteApp(secondaryApp);
+    } catch {}
+    throw err;
+  }
+}
 
 export {
   signInWithEmailAndPassword,

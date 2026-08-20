@@ -1,5 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Shield, UserCheck, KeyRound, Ban, CheckCircle2, Trash2, Filter } from 'lucide-react';
+import {
+  Plus,
+  Shield,
+  UserCheck,
+  KeyRound,
+  Ban,
+  CheckCircle2,
+  Trash2,
+  Filter,
+  Eye,
+  EyeOff,
+  Sparkles,
+  Copy,
+  Check,
+  Lock,
+  Building2,
+  ExternalLink,
+} from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { User, Company, SubAdminPermission, Role } from '../../types';
@@ -20,11 +37,32 @@ export const AdminTeamPage: React.FC = () => {
   // Filter
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'ADMIN' | 'SUB_ADMIN'>('ALL');
 
+  // Password Generator Helper
+  const generateSecurePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let randomPart = '';
+    for (let i = 0; i < 6; i++) {
+      randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `Nab#${randomPart}!${Math.floor(10 + Math.random() * 90)}`;
+  };
+
   // Modal state
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    name: string;
+    email: string;
+    password: string;
+    role: Role;
+    companyName?: string;
+  } | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
   const [form, setForm] = useState({
     name: '',
     email: '',
+    password: '',
     role: 'SUB_ADMIN' as Role,
     companyId: '',
     permissions: ['manage_products', 'edit_website', 'manage_hours', 'moderate_reviews'] as SubAdminPermission[],
@@ -62,9 +100,27 @@ export const AdminTeamPage: React.FC = () => {
     fetchData();
   }, []);
 
+  const openCreateModal = () => {
+    const initialPass = generateSecurePassword();
+    setForm({
+      name: '',
+      email: '',
+      password: initialPass,
+      role: isOwner ? 'ADMIN' : 'SUB_ADMIN',
+      companyId: companies[0]?.id || '',
+      permissions: ['manage_products', 'edit_website', 'manage_hours', 'moderate_reviews'],
+    });
+    setShowPassword(true);
+    setCreateModalOpen(true);
+  };
+
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.email) return;
+    if (!form.password || form.password.trim().length < 6) {
+      setFeedback({ type: 'error', message: 'Please provide a password of at least 6 characters.' });
+      return;
+    }
     if (form.role === 'SUB_ADMIN' && !form.companyId) {
       setFeedback({ type: 'error', message: 'Please select a company to assign to the Sub-Admin.' });
       return;
@@ -73,9 +129,11 @@ export const AdminTeamPage: React.FC = () => {
     setActionLoading(true);
     setFeedback(null);
     try {
-      await api.createUser({
+      const targetCompany = companies.find((c) => c.id === form.companyId);
+      const createdUser = await api.createUser({
         name: form.name.trim(),
         email: form.email.trim().toLowerCase(),
+        password: form.password.trim(),
         role: form.role,
         assignedCompanyId: form.role === 'SUB_ADMIN' ? form.companyId : '',
         assignedCompanyIds: form.role === 'SUB_ADMIN' && form.companyId ? [form.companyId] : [],
@@ -83,24 +141,18 @@ export const AdminTeamPage: React.FC = () => {
         status: 'active',
       });
 
-      // Optionally send welcome password reset trigger
-      try {
-        await resetPassword(form.email.trim().toLowerCase());
-      } catch {
-        // Safe ignore if user auth not yet initialized in firebase auth
-      }
-
       setCreateModalOpen(false);
-      setForm({
-        name: '',
-        email: '',
-        role: isOwner ? 'ADMIN' : 'SUB_ADMIN',
-        companyId: companies[0]?.id || '',
-        permissions: ['manage_products', 'edit_website', 'manage_hours', 'moderate_reviews'],
+      setCreatedCredentials({
+        name: form.name.trim(),
+        email: form.email.trim().toLowerCase(),
+        password: form.password.trim(),
+        role: form.role,
+        companyName: targetCompany?.name,
       });
+
       setFeedback({
         type: 'success',
-        message: `Account created for ${form.name} (${form.role}). An initial password setup email has been dispatched.`,
+        message: `Account created for ${form.name} (${form.role}) with Firebase Authentication password credentials.`,
       });
       await fetchData();
     } catch (err: any) {
@@ -168,6 +220,28 @@ export const AdminTeamPage: React.FC = () => {
     }));
   };
 
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(label);
+    setTimeout(() => setCopiedField(null), 2500);
+  };
+
+  const copyAllCredentials = () => {
+    if (!createdCredentials) return;
+    const text = `🔐 NABSITE Staff Login Credentials
+-----------------------------------
+Name: ${createdCredentials.name}
+Email: ${createdCredentials.email}
+Password: ${createdCredentials.password}
+Role: ${createdCredentials.role === 'ADMIN' ? 'Platform Admin' : 'Company Sub-Admin'}${
+      createdCredentials.companyName ? `\nAssigned Business: ${createdCredentials.companyName}` : ''
+    }
+Login URL: ${window.location.origin}/login
+-----------------------------------
+Please sign in and change your password in settings upon first login.`;
+    copyToClipboard(text, 'all');
+  };
+
   const filteredUsers = users.filter((u) => {
     if (roleFilter === 'ALL') return true;
     return u.role === roleFilter;
@@ -182,18 +256,10 @@ export const AdminTeamPage: React.FC = () => {
             Staff & Team Management
           </h1>
           <p className="text-xs text-slate-500">
-            Authorized account provisioning for NABSITE platform administrators and delegated company managers.
+            Authorized account provisioning with Firebase Auth credentials for platform administrators and company managers.
           </p>
         </div>
-        <Button
-          size="sm"
-          variant="primary"
-          icon={Plus}
-          onClick={() => {
-            setForm((prev) => ({ ...prev, role: isOwner ? 'ADMIN' : 'SUB_ADMIN' }));
-            setCreateModalOpen(true);
-          }}
-        >
+        <Button size="sm" variant="primary" icon={Plus} onClick={openCreateModal}>
           Create Authorized Account
         </Button>
       </div>
@@ -359,7 +425,7 @@ export const AdminTeamPage: React.FC = () => {
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         title="Create Authorized Staff Account"
-        description="Provision a verified administrative or company manager account."
+        description="Provision an administrative or company manager account with direct Firebase Auth credentials."
       >
         <form onSubmit={handleCreateAccount} className="space-y-4">
           <Input
@@ -378,6 +444,55 @@ export const AdminTeamPage: React.FC = () => {
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
+
+          {/* Password Input & Generator */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                Initial Password *
+              </label>
+              <button
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, password: generateSecurePassword() }))}
+                className="text-[11px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
+              >
+                <Sparkles className="w-3 h-3" />
+                Generate Secure Password
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                minLength={6}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder="Enter strong password (min 6 characters)"
+                className="w-full text-xs font-mono rounded-xl border border-slate-700 py-2.5 pl-3 pr-20 bg-slate-900 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  title={showPassword ? 'Hide Password' : 'Show Password'}
+                >
+                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(form.password, 'form-pass')}
+                  className="p-1 rounded text-slate-400 hover:text-amber-400 hover:bg-slate-800"
+                  title="Copy Password"
+                >
+                  {copiedField === 'form-pass' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400">
+              The user can immediately log in with this password and will be prompted to manage credentials.
+            </p>
+          </div>
 
           {isOwner && (
             <div className="space-y-1.5">
@@ -422,7 +537,7 @@ export const AdminTeamPage: React.FC = () => {
               <select
                 value={form.companyId}
                 onChange={(e) => setForm({ ...form, companyId: e.target.value })}
-                className="w-full text-xs rounded-xl border border-slate-700 p-2.5 bg-slate-900 text-slate-200"
+                className="w-full text-xs rounded-xl border border-slate-700 p-2.5 bg-slate-900 text-slate-200 focus:border-amber-500 focus:outline-none"
               >
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -464,10 +579,102 @@ export const AdminTeamPage: React.FC = () => {
           )}
 
           <Button type="submit" variant="primary" size="md" disabled={actionLoading} className="w-full">
-            {actionLoading ? 'Creating Account...' : 'Provision Staff Account'}
+            {actionLoading ? 'Provisioning Account in Firebase...' : 'Provision Staff Account with Credentials'}
           </Button>
         </form>
+      </Modal>
+
+      {/* Handover & Credentials Confirmation Modal */}
+      <Modal
+        isOpen={Boolean(createdCredentials)}
+        onClose={() => setCreatedCredentials(null)}
+        title="Account Provisioned Successfully"
+        description="Share these login credentials with the newly assigned staff member."
+      >
+        {createdCredentials && (
+          <div className="space-y-4">
+            <div className="p-3 bg-emerald-950/40 border border-emerald-800/80 rounded-xl text-emerald-300 text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                Account has been created in Firebase Auth and registered to the system database.
+              </span>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800 text-xs">
+                <span className="text-slate-400">Full Name</span>
+                <span className="font-bold text-white">{createdCredentials.name}</span>
+              </div>
+
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800 text-xs">
+                <span className="text-slate-400">Assigned Role</span>
+                <Badge variant={createdCredentials.role === 'ADMIN' ? 'warning' : 'neutral'} size="sm">
+                  {createdCredentials.role === 'ADMIN' ? 'Platform Admin' : 'Company Sub-Admin'}
+                </Badge>
+              </div>
+
+              {createdCredentials.companyName && (
+                <div className="flex justify-between items-center pb-2 border-b border-slate-800 text-xs">
+                  <span className="text-slate-400">Business Assignment</span>
+                  <span className="font-bold text-amber-400">{createdCredentials.companyName}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800 text-xs">
+                <span className="text-slate-400">Login Email</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-slate-200">{createdCredentials.email}</span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(createdCredentials.email, 'cred-email')}
+                    className="p-1 rounded text-slate-400 hover:text-white"
+                  >
+                    {copiedField === 'cred-email' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-400">Initial Password</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-amber-300 bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                    {createdCredentials.password}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(createdCredentials.password, 'cred-pass')}
+                    className="p-1 rounded text-slate-400 hover:text-white"
+                    title="Copy Password"
+                  >
+                    {copiedField === 'cred-pass' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1"
+                icon={copiedField === 'all' ? Check : Copy}
+                onClick={copyAllCredentials}
+              >
+                {copiedField === 'all' ? 'Copied to Clipboard!' : 'Copy Full Login Package'}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="flex-1"
+                onClick={() => setCreatedCredentials(null)}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
 };
+export default AdminTeamPage;

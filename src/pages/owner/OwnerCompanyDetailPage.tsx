@@ -31,6 +31,8 @@ import {
   Plus,
   Save,
   Eye,
+  EyeOff,
+  Copy,
   Check,
   X,
   Code2,
@@ -117,9 +119,28 @@ export const OwnerCompanyDetailPage: React.FC = () => {
 
   // Invite Sub-Admin Modal
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [inviteShowPassword, setInviteShowPassword] = useState(true);
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    name: string;
+    email: string;
+    password: string;
+    companyName: string;
+  } | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const generateSecurePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let randomPart = '';
+    for (let i = 0; i < 6; i++) {
+      randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `Nab#${randomPart}!${Math.floor(10 + Math.random() * 90)}`;
+  };
+
   const [inviteForm, setInviteForm] = useState({
     name: '',
     email: '',
+    password: '',
     permissions: ['edit_business_info', 'manage_products', 'moderate_reviews'],
   });
 
@@ -387,21 +408,34 @@ export const OwnerCompanyDetailPage: React.FC = () => {
   const handleInviteSubAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!company || !inviteForm.email || !inviteForm.name) return;
+    if (!inviteForm.password || inviteForm.password.trim().length < 6) {
+      showNotification('Please enter a password of at least 6 characters.', true);
+      return;
+    }
     setActionLoading(true);
     try {
-      await api.inviteUser({
-        name: inviteForm.name,
-        email: inviteForm.email,
+      await api.createUser({
+        name: inviteForm.name.trim(),
+        email: inviteForm.email.trim().toLowerCase(),
+        password: inviteForm.password.trim(),
         role: 'SUB_ADMIN',
-        companyId: company.id,
-        permissions: inviteForm.permissions,
+        assignedCompanyId: company.id,
+        assignedCompanyIds: [company.id],
+        permissions: inviteForm.permissions as any,
+        status: 'active',
       });
       setInviteModalOpen(false);
-      setInviteForm({ name: '', email: '', permissions: ['edit_business_info', 'manage_products', 'moderate_reviews'] });
-      showNotification(`Sub-Admin invitation sent to ${inviteForm.email}`);
+      setCreatedCredentials({
+        name: inviteForm.name.trim(),
+        email: inviteForm.email.trim().toLowerCase(),
+        password: inviteForm.password.trim(),
+        companyName: company.name,
+      });
+      setInviteForm({ name: '', email: '', password: '', permissions: ['edit_business_info', 'manage_products', 'moderate_reviews'] });
+      showNotification(`Sub-Admin account created for ${inviteForm.email}`);
       fetchData();
     } catch (err: any) {
-      showNotification(err.message || 'Failed to invite sub-admin.', true);
+      showNotification(err.message || 'Failed to create sub-admin.', true);
     } finally {
       setActionLoading(false);
     }
@@ -1014,8 +1048,22 @@ export const OwnerCompanyDetailPage: React.FC = () => {
               <h3 className="font-extrabold text-base text-slate-900 dark:text-white">Assigned Sub-Administrators</h3>
               <p className="text-xs text-slate-500">Business managers with granular scoped permissions for this company.</p>
             </div>
-            <Button size="sm" variant="gold" icon={Plus} onClick={() => setInviteModalOpen(true)}>
-              Invite Sub-Admin
+            <Button
+              size="sm"
+              variant="gold"
+              icon={Plus}
+              onClick={() => {
+                setInviteForm({
+                  name: '',
+                  email: '',
+                  password: generateSecurePassword(),
+                  permissions: ['edit_business_info', 'manage_products', 'moderate_reviews'],
+                });
+                setInviteShowPassword(true);
+                setInviteModalOpen(true);
+              }}
+            >
+              Create Sub-Admin Account
             </Button>
           </div>
 
@@ -1239,12 +1287,12 @@ export const OwnerCompanyDetailPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Invite Sub-Admin Modal */}
+      {/* Create / Invite Sub-Admin Modal */}
       <Modal
         isOpen={inviteModalOpen}
         onClose={() => setInviteModalOpen(false)}
-        title="Invite Sub-Administrator"
-        description={`Grant scoped management access for ${company.name}.`}
+        title="Create Sub-Administrator Account"
+        description={`Grant scoped management access for ${company.name} with Firebase Auth login credentials.`}
       >
         <form onSubmit={handleInviteSubAdmin} className="space-y-4">
           <Input
@@ -1262,6 +1310,59 @@ export const OwnerCompanyDetailPage: React.FC = () => {
             value={inviteForm.email}
             onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
           />
+
+          {/* Initial Password */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                Initial Password *
+              </label>
+              <button
+                type="button"
+                onClick={() => setInviteForm((prev) => ({ ...prev, password: generateSecurePassword() }))}
+                className="text-[11px] font-bold text-amber-500 hover:text-amber-400 flex items-center gap-1 transition-colors"
+              >
+                <Sparkles className="w-3 h-3" />
+                Generate Secure Password
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type={inviteShowPassword ? 'text' : 'password'}
+                required
+                minLength={6}
+                value={inviteForm.password}
+                onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
+                placeholder="Enter password (min 6 characters)"
+                className="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 py-2.5 pl-3 pr-20 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setInviteShowPassword(!inviteShowPassword)}
+                  className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  title={inviteShowPassword ? 'Hide Password' : 'Show Password'}
+                >
+                  {inviteShowPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(inviteForm.password);
+                    setCopiedField('invite-pass');
+                    setTimeout(() => setCopiedField(null), 2000);
+                  }}
+                  className="p-1 rounded text-slate-400 hover:text-amber-500"
+                  title="Copy Password"
+                >
+                  {copiedField === 'invite-pass' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-500">
+              The sub-admin will use this password to sign in immediately.
+            </p>
+          </div>
 
           <div className="space-y-2">
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
@@ -1301,9 +1402,111 @@ export const OwnerCompanyDetailPage: React.FC = () => {
           </div>
 
           <Button type="submit" variant="gold" size="md" className="w-full font-bold" disabled={actionLoading}>
-            Send Sub-Admin Invitation
+            {actionLoading ? 'Creating Account in Firebase...' : 'Create Sub-Admin Account'}
           </Button>
         </form>
+      </Modal>
+
+      {/* Handover & Credentials Confirmation Modal */}
+      <Modal
+        isOpen={Boolean(createdCredentials)}
+        onClose={() => setCreatedCredentials(null)}
+        title="Sub-Admin Account Created"
+        description="Share these login credentials with the company manager."
+      >
+        {createdCredentials && (
+          <div className="space-y-4">
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/80 rounded-xl text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+              <span>
+                Account has been created in Firebase Auth and registered to {createdCredentials.companyName}.
+              </span>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800 text-xs">
+                <span className="text-slate-500">Sub-Admin Name</span>
+                <span className="font-bold text-slate-900 dark:text-white">{createdCredentials.name}</span>
+              </div>
+
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800 text-xs">
+                <span className="text-slate-500">Business Assignment</span>
+                <span className="font-bold text-amber-600 dark:text-amber-400">{createdCredentials.companyName}</span>
+              </div>
+
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800 text-xs">
+                <span className="text-slate-500">Login Email</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-slate-800 dark:text-slate-200">{createdCredentials.email}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdCredentials.email);
+                      setCopiedField('sub-cred-email');
+                      setTimeout(() => setCopiedField(null), 2000);
+                    }}
+                    className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                  >
+                    {copiedField === 'sub-cred-email' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500">Initial Password</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-slate-950 px-2 py-1 rounded border border-amber-200 dark:border-slate-800">
+                    {createdCredentials.password}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdCredentials.password);
+                      setCopiedField('sub-cred-pass');
+                      setTimeout(() => setCopiedField(null), 2000);
+                    }}
+                    className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                    title="Copy Password"
+                  >
+                    {copiedField === 'sub-cred-pass' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1"
+                icon={copiedField === 'sub-all' ? Check : Copy}
+                onClick={() => {
+                  const text = `🔐 NABSITE Sub-Admin Credentials
+-----------------------------------
+Company: ${createdCredentials.companyName}
+Name: ${createdCredentials.name}
+Email: ${createdCredentials.email}
+Password: ${createdCredentials.password}
+Login URL: ${window.location.origin}/login
+-----------------------------------`;
+                  navigator.clipboard.writeText(text);
+                  setCopiedField('sub-all');
+                  setTimeout(() => setCopiedField(null), 2000);
+                }}
+              >
+                {copiedField === 'sub-all' ? 'Copied to Clipboard!' : 'Copy Login Details'}
+              </Button>
+              <Button
+                variant="gold"
+                size="sm"
+                className="flex-1"
+                onClick={() => setCreatedCredentials(null)}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

@@ -14,7 +14,7 @@ import {
   writeBatch,
   onSnapshot,
 } from 'firebase/firestore';
-import { db as firestoreDb } from './firebase';
+import { db as firestoreDb, createFirebaseAuthUser } from './firebase';
 import {
   Company,
   Website,
@@ -117,12 +117,35 @@ export const api = {
     return [];
   },
 
-  createUser: async (userData: Partial<User>): Promise<User> => {
-    const userId = userData.id || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  createUser: async (userData: Partial<User> & { password?: string }): Promise<User> => {
+    const rawEmail = (userData.email || '').trim().toLowerCase();
+    let authUid = userData.id;
+
+    // If password provided, provision the real user account in Firebase Auth
+    if (userData.password && userData.password.trim()) {
+      try {
+        const createdUid = await createFirebaseAuthUser(rawEmail, userData.password.trim());
+        if (createdUid) {
+          authUid = createdUid;
+        }
+      } catch (authErr: any) {
+        if (authErr.code === 'auth/email-already-in-use') {
+          console.warn('Firebase Auth user already exists for:', rawEmail);
+        } else if (authErr.code === 'auth/weak-password') {
+          throw new ApiError(400, 'The password is too weak. Please use at least 6 characters.');
+        } else if (authErr.code === 'auth/invalid-email') {
+          throw new ApiError(400, 'The provided email address is improperly formatted.');
+        } else {
+          throw new ApiError(500, `Firebase Authentication error: ${authErr.message || authErr}`);
+        }
+      }
+    }
+
+    const userId = authUid || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const nowIso = new Date().toISOString();
     const newUser: User = {
       id: userId,
-      email: (userData.email || '').trim().toLowerCase(),
+      email: rawEmail,
       name: userData.name || 'Staff User',
       role: userData.role || 'SUB_ADMIN',
       status: userData.status || 'active',
@@ -140,9 +163,9 @@ export const api = {
         'Failed to save user account (timeout).'
       );
       await logAudit('CREATE', 'USER', userId, `Created user account ${newUser.email} with role ${newUser.role}`, newUser.name);
-    } catch (err) {
+    } catch (err: any) {
       logError('createUser', err, { userId });
-      throw new ApiError(500, 'Failed to save user account in Firestore.');
+      throw new ApiError(500, `Failed to save user account in Firestore: ${err.message || err}`);
     }
     return newUser;
   },
