@@ -18,6 +18,7 @@ import { OwnerGatewayPage } from './pages/auth/OwnerGatewayPage';
 // Studio & Wizard pages
 import { WebsiteStudioPage } from './pages/studio/WebsiteStudioPage';
 import { WebsiteWizardPage } from './pages/studio/WebsiteWizardPage';
+import { WebsitesListPage } from './pages/websites/WebsitesListPage';
 
 // Owner God Mode pages
 import { OwnerOverviewPage } from './pages/owner/OwnerOverviewPage';
@@ -163,7 +164,7 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['OWNER', 'ADMIN', 'SUB_ADMIN']}>
                 <DashboardLayout>
-                  <OwnerCompaniesPage />
+                  <WebsitesListPage />
                 </DashboardLayout>
               </ProtectedRoute>
             }
@@ -292,7 +293,7 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['OWNER']}>
                 <DashboardLayout>
-                  <OwnerCompaniesPage />
+                  <WebsitesListPage />
                 </DashboardLayout>
               </ProtectedRoute>
             }
@@ -534,7 +535,7 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['OWNER']}>
                 <DashboardLayout>
-                  <OwnerCompaniesPage />
+                  <WebsitesListPage />
                 </DashboardLayout>
               </ProtectedRoute>
             }
@@ -776,7 +777,7 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['OWNER', 'ADMIN']}>
                 <DashboardLayout>
-                  <OwnerCompaniesPage />
+                  <WebsitesListPage />
                 </DashboardLayout>
               </ProtectedRoute>
             }

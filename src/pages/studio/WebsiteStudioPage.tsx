@@ -301,13 +301,14 @@ export const WebsiteStudioPage: React.FC = () => {
     if (!company) return;
     setIsSaving(true);
     try {
-      const res: any = await api.saveDraft(company.websiteId || company.id, config);
+      const res: any = await api.saveDraft(company.websiteId || company.id, config, selectedThemeId);
       if (res) setWebsite(res?.website || res);
       setHasUnsavedChanges(false);
-      showToast('Draft changes saved securely!', 'success');
+      showToast('Draft changes & template saved to Firestore!', 'success');
     } catch (err: any) {
       console.error(err);
-      showToast('Failed to save draft. Please retry.', 'error');
+      const errDetail = err?.message || 'Failed to save draft to Firestore.';
+      showToast(errDetail, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -317,14 +318,15 @@ export const WebsiteStudioPage: React.FC = () => {
     if (!company) return;
     setIsPublishing(true);
     try {
-      await api.saveDraft(company.websiteId || company.id, config);
+      await api.saveDraft(company.websiteId || company.id, config, selectedThemeId);
       const res: any = await api.publishWebsite(company.websiteId || company.id);
       if (res) setWebsite(res?.website || res);
       setHasUnsavedChanges(false);
       showToast(`Website published successfully at /c/${company.slug}`, 'success');
     } catch (err: any) {
       console.error(err);
-      showToast('Failed to publish website.', 'error');
+      const errDetail = err?.message || 'Failed to publish website.';
+      showToast(errDetail, 'error');
     } finally {
       setIsPublishing(false);
     }
@@ -359,10 +361,10 @@ export const WebsiteStudioPage: React.FC = () => {
     setHasUnsavedChanges(true);
 
     try {
-      const saveRes: any = await api.saveDraft(company.websiteId || company.id, finalConfig);
+      const saveRes: any = await api.saveDraft(company.websiteId || company.id, finalConfig, newThemeId);
       if (saveRes) setWebsite(saveRes?.website || saveRes);
       setHasUnsavedChanges(false);
-      showToast(`Switched to "${targetTheme?.name || 'New Template'}"! All data preserved.`, 'success');
+      showToast(`Switched and saved template "${targetTheme?.name || 'New Template'}" to Firestore!`, 'success');
     } catch (err: any) {
       console.error(err);
       showToast('Template switched locally. Click Save Draft to sync.', 'info');

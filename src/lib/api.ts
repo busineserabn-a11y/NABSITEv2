@@ -12,6 +12,7 @@ import {
   orderBy,
   limit,
   writeBatch,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db as firestoreDb } from './firebase';
 import {
@@ -209,7 +210,16 @@ export const api = {
     return api.getCompany(slug);
   },
 
-  getPublicCompany: async (identifier: string): Promise<{ company: Company; website?: Website }> => {
+  getPublicCompany: async (identifier: string): Promise<{
+    company: Company;
+    website?: Website;
+    products?: Product[];
+    productCategories?: ProductCategory[];
+    reviews?: Review[];
+    offers?: Offer[];
+    announcements?: Announcement[];
+    suspended?: boolean;
+  }> => {
     const company = await api.getCompany(identifier);
     let website: Website | undefined;
     try {
@@ -217,7 +227,28 @@ export const api = {
     } catch {
       // website can be undefined
     }
-    return { company, website };
+
+    const compId = company.id;
+    const [products, productCategories, reviews, offers, announcements] = await Promise.all([
+      api.getProducts(compId).catch(() => []),
+      api.getProductCategories(compId).catch(() => []),
+      api.getReviews(compId).catch(() => []),
+      api.getOffers(compId).catch(() => []),
+      api.getAnnouncements(compId).catch(() => []),
+    ]);
+
+    const isSuspended = company.status === 'suspended' || website?.status === 'suspended';
+
+    return {
+      company,
+      website,
+      products,
+      productCategories,
+      reviews,
+      offers,
+      announcements,
+      suspended: isSuspended,
+    };
   },
 
   discoverCompanies: async (
@@ -551,7 +582,44 @@ export const api = {
     }
   },
 
-  // --- Websites CRUD & Studio ---
+  // --- Websites CRUD & Realtime Engine ---
+  getWebsites: async (): Promise<Website[]> => {
+    try {
+      const snap = await withTimeout(
+        getDocs(collection(firestoreDb, 'websites')),
+        10000,
+        'Fetching websites from Firestore timed out'
+      );
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Website));
+    } catch (err: any) {
+      logError('getWebsites', err);
+      const code = err.code || 'UNKNOWN';
+      const msg = err.message || String(err);
+      throw new ApiError(500, `[Firestore Error on collection/websites (${code})]: ${msg}`);
+    }
+  },
+
+  subscribeWebsites: (
+    onNext: (websites: Website[], fromCache: boolean) => void,
+    onError: (error: Error, code: string) => void
+  ): (() => void) => {
+    const q = collection(firestoreDb, 'websites');
+    return onSnapshot(
+      q,
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        const fromCache = snapshot.metadata.fromCache;
+        const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Website));
+        onNext(list, fromCache);
+      },
+      (err: any) => {
+        const code = err.code || 'UNKNOWN';
+        logError('subscribeWebsites', err);
+        onError(err, code);
+      }
+    );
+  },
+
   getWebsite: async (id: string): Promise<Website> => {
     try {
       const snap = await withTimeout(getDoc(doc(firestoreDb, 'websites', id)), 8000);
@@ -564,10 +632,295 @@ export const api = {
       if (!webSnap.empty) {
         return { id: webSnap.docs[0].id, ...webSnap.docs[0].data() } as Website;
       }
-    } catch (err) {
+    } catch (err: any) {
       logError('getWebsite', err, { id });
+      const code = err.code || 'UNKNOWN';
+      throw new ApiError(500, `[Firestore Error on websites/${id} (${code})]: ${err.message || err}`);
     }
-    throw new ApiError(404, 'Website configuration not found');
+    throw new ApiError(404, `Website configuration '${id}' not found in Firestore`);
+  },
+
+  createWebsite: async (data: {
+    companyId: string;
+    id?: string;
+    themeId?: string;
+    draftConfig?: any;
+    status?: 'draft' | 'published' | 'suspended';
+  }): Promise<Website> => {
+    if (!data.companyId) {
+      throw new ApiError(400, 'Cannot create website without a valid companyId');
+    }
+    const webId = data.id || `web_${data.companyId}`;
+    const nowIso = new Date().toISOString();
+
+    let parentCompany: Company | null = null;
+    try {
+      parentCompany = await api.getCompany(data.companyId);
+    } catch {
+      // Non-fatal if company lookup takes longer
+    }
+
+    const defaultPages = [
+      {
+        id: 'page_home',
+        name: 'Home',
+        title: 'Home',
+        slug: 'home',
+        isHome: true,
+        isPublished: true,
+        showInNavigation: true,
+        sections: [
+          {
+            id: 'sec_hero',
+            type: 'hero',
+            title: parentCompany?.name || 'Welcome to Our Establishment',
+            subtitle: parentCompany?.shortDescription || 'Experience unmatched quality, culinary excellence, and hospitality.',
+            isVisible: true,
+            order: 1,
+          },
+          {
+            id: 'sec_featured',
+            type: 'products',
+            title: 'Featured Offerings',
+            subtitle: 'Handcrafted quality and signature selections',
+            isVisible: true,
+            order: 2,
+          },
+          {
+            id: 'sec_hours',
+            type: 'hours',
+            title: 'Location & Hours',
+            subtitle: parentCompany?.address || 'Bole Road, Addis Ababa, Ethiopia',
+            isVisible: true,
+            order: 3,
+          },
+        ],
+      },
+      {
+        id: 'page_menu',
+        name: 'Menu & Offerings',
+        title: 'Digital Menu & Offerings',
+        slug: 'menu',
+        isPublished: true,
+        showInNavigation: true,
+        sections: [
+          {
+            id: 'sec_menu_hero',
+            type: 'hero',
+            title: 'Explore Our Complete Menu',
+            subtitle: 'Discover our comprehensive catalog of dishes, drinks, and special items',
+            isVisible: true,
+            order: 1,
+          },
+          {
+            id: 'sec_menu_items',
+            type: 'products',
+            title: 'All Offerings',
+            subtitle: 'Freshly prepared and curated daily',
+            isVisible: true,
+            order: 2,
+          },
+        ],
+      },
+      {
+        id: 'page_about',
+        name: 'About Us',
+        title: 'About Our Business',
+        slug: 'about',
+        isPublished: true,
+        showInNavigation: true,
+        sections: [
+          {
+            id: 'sec_about_story',
+            type: 'about',
+            title: 'Our Heritage & Tradition',
+            subtitle: `The Story of ${parentCompany?.name || 'our company'}`,
+            content: parentCompany?.shortDescription || 'Certified business providing superior service and verified hospitality across Ethiopia.',
+            isVisible: true,
+            order: 1,
+          },
+        ],
+      },
+      {
+        id: 'page_contact',
+        name: 'Contact',
+        title: 'Contact & Inquiries',
+        slug: 'contact',
+        isPublished: true,
+        showInNavigation: true,
+        sections: [
+          {
+            id: 'sec_contact_info',
+            type: 'contact',
+            title: 'Get in Touch',
+            subtitle: 'Call, telegram, or visit our venue directly',
+            isVisible: true,
+            order: 1,
+          },
+        ],
+      },
+    ];
+
+    const newWebsite: Website = {
+      id: webId,
+      companyId: data.companyId,
+      themeId: data.themeId || 'theme_restaurant_classic',
+      status: data.status || 'draft',
+      draftConfig: data.draftConfig || {
+        design: {
+          primaryColor: '#B91C1C',
+          secondaryColor: '#7F1D1D',
+          accentColor: '#F97316',
+          bgColor: '#FFFBEB',
+          surfaceColor: '#FFFFFF',
+          textColor: '#451A03',
+          mutedTextColor: '#78716C',
+          headingFont: 'Playfair Display',
+          bodyFont: 'Plus Jakarta Sans',
+          spacingDensity: 'comfortable',
+        },
+        header: {
+          showLogo: true,
+          showCompanyName: true,
+          style: 'standard',
+          sticky: true,
+          showPhoneBtn: true,
+          showTelegramBtn: true,
+          showCtaBtn: true,
+        },
+        footer: {
+          showLogo: true,
+          showDescription: true,
+          showContactInfo: true,
+          showSocialLinks: true,
+          showNavigation: true,
+          showDeveloperCredit: true,
+        },
+        navigation: [
+          { id: 'nav_home', label: 'Home', type: 'page', target: 'home', order: 1 },
+          { id: 'nav_menu', label: 'Menu & Offerings', type: 'page', target: 'menu', order: 2 },
+          { id: 'nav_about', label: 'About Us', type: 'page', target: 'about', order: 3 },
+          { id: 'nav_contact', label: 'Contact', type: 'page', target: 'contact', order: 4 },
+        ],
+        pages: defaultPages,
+        installedFeatures: ['feature_digital_menu', 'feature_qr_generator'],
+        seo: {
+          siteTitle: parentCompany?.name || 'Verified Website',
+          metaDescription: parentCompany?.shortDescription || 'Official verified storefront on NABSITE.',
+          keywords: [parentCompany?.name || 'Business', parentCompany?.category || 'Ethiopia', 'NABSITE'],
+        },
+      },
+      publishedConfig: null,
+      version: 1,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      // 1. Write to Firestore
+      await withTimeout(
+        setDoc(doc(firestoreDb, 'websites', webId), newWebsite),
+        10000,
+        'Writing website document to Firestore timed out'
+      );
+
+      // 2. Read-after-write verification
+      const verifySnap = await getDoc(doc(firestoreDb, 'websites', webId));
+      if (!verifySnap.exists()) {
+        throw new ApiError(500, `Verification failed: Website ${webId} was not confirmed in Firestore.`);
+      }
+
+      // 3. Link with Company
+      try {
+        await updateDoc(doc(firestoreDb, 'companies', data.companyId), {
+          websiteId: webId,
+          websiteStatus: newWebsite.status,
+          updatedAt: nowIso,
+        });
+      } catch (cErr) {
+        console.warn('Company link notice:', cErr);
+      }
+
+      await logAudit('CREATE', 'WEBSITE', webId, `Created website for ${data.companyId}`);
+      return { id: verifySnap.id, ...verifySnap.data() } as Website;
+    } catch (err: any) {
+      logError('createWebsite', err, { webId, companyId: data.companyId });
+      const code = err.code || 'UNKNOWN';
+      const msg = err.message || String(err);
+      throw new ApiError(500, `[Firestore Error on websites/${webId} (${code})]: ${msg}`);
+    }
+  },
+
+  updateWebsite: async (id: string, data: Partial<Website>): Promise<Website> => {
+    try {
+      const webRef = doc(firestoreDb, 'websites', id);
+      const updatePayload = {
+        ...data,
+        updatedAt: new Date().toISOString(),
+      };
+      await withTimeout(setDoc(webRef, updatePayload, { merge: true }), 10000);
+
+      // Read-after-write verification
+      const snap = await getDoc(webRef);
+      if (!snap.exists()) {
+        throw new ApiError(404, `Website ${id} not found after write`);
+      }
+
+      const verified = { id: snap.id, ...snap.data() } as Website;
+      if (verified.companyId && data.status) {
+        try {
+          await updateDoc(doc(firestoreDb, 'companies', verified.companyId), {
+            websiteStatus: data.status,
+            updatedAt: new Date().toISOString(),
+          });
+        } catch {
+          // ignore
+        }
+      }
+
+      await logAudit('UPDATE', 'WEBSITE', id, `Updated website ${id}`);
+      return verified;
+    } catch (err: any) {
+      logError('updateWebsite', err, { id });
+      const code = err.code || 'UNKNOWN';
+      const msg = err.message || String(err);
+      throw new ApiError(500, `[Firestore Error on update websites/${id} (${code})]: ${msg}`);
+    }
+  },
+
+  deleteWebsite: async (id: string): Promise<{ success: boolean }> => {
+    try {
+      let companyId: string | null = null;
+      try {
+        const snap = await getDoc(doc(firestoreDb, 'websites', id));
+        if (snap.exists()) {
+          companyId = snap.data().companyId;
+        }
+      } catch {
+        // ignore pre-lookup error
+      }
+
+      await withTimeout(deleteDoc(doc(firestoreDb, 'websites', id)), 10000);
+
+      if (companyId) {
+        try {
+          await updateDoc(doc(firestoreDb, 'companies', companyId), {
+            websiteStatus: 'draft',
+            updatedAt: new Date().toISOString(),
+          });
+        } catch {
+          // ignore
+        }
+      }
+
+      await logAudit('DELETE', 'WEBSITE', id, `Deleted website ${id}`);
+      return { success: true };
+    } catch (err: any) {
+      logError('deleteWebsite', err, { id });
+      const code = err.code || 'UNKNOWN';
+      const msg = err.message || String(err);
+      throw new ApiError(500, `[Firestore Error on delete websites/${id} (${code})]: ${msg}`);
+    }
   },
 
   getCompanyWebsite: async (companyId: string): Promise<{ company: Company; website: Website }> => {
@@ -576,82 +929,17 @@ export const api = {
     try {
       website = await api.getWebsite(company.websiteId || companyId);
     } catch {
-      // Auto create website object if missing
-      website = {
-        id: company.websiteId || `web_${company.id}`,
+      // Provision website immediately if missing
+      website = await api.createWebsite({
         companyId: company.id,
         themeId: 'theme_restaurant_classic',
         status: 'draft',
-        draftConfig: {
-          design: {
-            primaryColor: '#B91C1C',
-            secondaryColor: '#7F1D1D',
-            accentColor: '#F97316',
-            bgColor: '#FFFBEB',
-            surfaceColor: '#FFFFFF',
-            textColor: '#451A03',
-            mutedTextColor: '#78716C',
-            headingFont: 'Playfair Display',
-            bodyFont: 'Plus Jakarta Sans',
-            spacingDensity: 'comfortable',
-          },
-          header: {
-            showLogo: true,
-            showCompanyName: true,
-            style: 'standard',
-            sticky: true,
-            showPhoneBtn: true,
-            showTelegramBtn: true,
-            showCtaBtn: true,
-          },
-          footer: {
-            showLogo: true,
-            showDescription: true,
-            showContactInfo: true,
-            showSocialLinks: true,
-            showNavigation: true,
-            showDeveloperCredit: true,
-          },
-          navigation: [
-            { id: 'nav_home', label: 'Home', type: 'page', target: 'home', order: 1 },
-          ],
-          pages: [
-            {
-              id: 'page_home',
-              title: 'Home',
-              slug: 'home',
-              isPublished: true,
-              showInNavigation: true,
-              sections: [
-                {
-                  id: 'sec_hero',
-                  type: 'hero',
-                  title: company.name,
-                  subtitle: company.shortDescription || 'Welcome to our establishment.',
-                  isVisible: true,
-                  order: 1,
-                },
-              ],
-            },
-          ],
-          installedFeatures: ['feature_digital_menu', 'feature_qr_generator'],
-          seo: {
-            siteTitle: company.name,
-            metaDescription: company.shortDescription,
-            keywords: [company.name, company.category, 'Ethiopia'],
-          },
-        },
-        publishedConfig: null,
-        version: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setDoc(doc(firestoreDb, 'websites', website.id), website, { merge: true }).catch(() => {});
+      });
     }
     return { company, website: website as Website };
   },
 
-  saveWebsiteDraft: async (id: string, draftConfig: any): Promise<Website> => {
+  saveWebsiteDraft: async (id: string, draftConfig: any, themeId?: string): Promise<Website> => {
     try {
       let targetId = id;
       let existingData: any = {};
@@ -668,24 +956,35 @@ export const api = {
       }
 
       const webRef = doc(firestoreDb, 'websites', targetId);
-      const updatePayload = {
+      const updatePayload: any = {
         ...existingData,
         id: targetId,
         companyId: existingData.companyId || id,
         draftConfig,
         updatedAt: new Date().toISOString(),
       };
+      if (themeId) {
+        updatePayload.themeId = themeId;
+      }
+
       await withTimeout(setDoc(webRef, updatePayload, { merge: true }), 10000);
+
+      // Read-after-write verification
       const snap = await getDoc(webRef);
+      if (!snap.exists()) {
+        throw new ApiError(500, `Failed to verify saved draft on websites/${targetId}`);
+      }
       return { id: snap.id, ...snap.data() } as Website;
     } catch (err: any) {
       logError('saveWebsiteDraft', err, { id });
-      throw new ApiError(500, `Failed to save website draft: ${err.message}`);
+      const code = err.code || 'UNKNOWN';
+      const msg = err.message || String(err);
+      throw new ApiError(500, `[Firestore Error on saveWebsiteDraft (${code})]: ${msg}`);
     }
   },
 
-  saveDraft: async (id: string, draftConfig: any): Promise<Website> => {
-    return api.saveWebsiteDraft(id, draftConfig);
+  saveDraft: async (id: string, draftConfig: any, themeId?: string): Promise<Website> => {
+    return api.saveWebsiteDraft(id, draftConfig, themeId);
   },
 
   publishWebsite: async (id: string): Promise<Website> => {
@@ -741,11 +1040,17 @@ export const api = {
       await withTimeout(batch.commit(), 10000);
       await logAudit('PUBLISH', 'WEBSITE', targetId, `Published website version ${newVersion}`);
 
+      // Read-after-write verification
       const updatedSnap = await getDoc(targetRef);
+      if (!updatedSnap.exists()) {
+        throw new ApiError(500, `Published website verification failed for websites/${targetId}`);
+      }
       return { id: updatedSnap.id, ...updatedSnap.data() } as Website;
     } catch (err: any) {
       logError('publishWebsite', err, { id });
-      throw new ApiError(500, `Failed to publish website: ${err.message}`);
+      const code = err.code || 'UNKNOWN';
+      const msg = err.message || String(err);
+      throw new ApiError(500, `[Firestore Error on publishWebsite (${code})]: ${msg}`);
     }
   },
 
@@ -753,11 +1058,24 @@ export const api = {
     try {
       const webRef = doc(firestoreDb, 'websites', id);
       await withTimeout(updateDoc(webRef, { status: 'draft', updatedAt: new Date().toISOString() }), 8000);
+      
       const snap = await getDoc(webRef);
+      if (snap.exists() && snap.data().companyId) {
+        try {
+          await updateDoc(doc(firestoreDb, 'companies', snap.data().companyId), {
+            websiteStatus: 'draft',
+            updatedAt: new Date().toISOString(),
+          });
+        } catch {
+          // ignore
+        }
+      }
       return { id: snap.id, ...snap.data() } as Website;
     } catch (err: any) {
       logError('unpublishWebsite', err, { id });
-      throw new ApiError(500, `Failed to unpublish website: ${err.message}`);
+      const code = err.code || 'UNKNOWN';
+      const msg = err.message || String(err);
+      throw new ApiError(500, `[Firestore Error on unpublishWebsite (${code})]: ${msg}`);
     }
   },
 
@@ -767,25 +1085,24 @@ export const api = {
       const q = companyId
         ? query(collection(firestoreDb, 'products'), where('companyId', '==', companyId))
         : collection(firestoreDb, 'products');
-      const snap = await withTimeout(getDocs(q), 8000);
-      if (!snap.empty) {
-        return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product));
-      }
-    } catch (err) {
+      const snap = await withTimeout(getDocs(q), 10000, 'Fetching products from Firestore timed out');
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product));
+    } catch (err: any) {
       logError('getProducts', err, { companyId });
+      const code = err.code || 'UNKNOWN';
+      throw new ApiError(500, `[Firestore Error on products query (${code})]: ${err.message || err}`);
     }
-    return [];
   },
 
   createProduct: async (data: Partial<Product>): Promise<Product> => {
-    const prodId = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const prodId = data.id || `prod_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const newProd: Product = {
       id: prodId,
       companyId: data.companyId || 'comp_1',
       categoryId: data.categoryId || 'cat_1',
       name: data.name || 'New Dish / Item',
       description: data.description || '',
-      price: data.price || '0 ETB',
+      price: data.price ?? 0,
       currency: data.currency || 'ETB',
       image: data.image || 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400&auto=format&fit=crop&q=80',
       isAvailable: data.isAvailable ?? true,
@@ -794,32 +1111,43 @@ export const api = {
       sortOrder: data.sortOrder || 0,
     };
     try {
-      await withTimeout(setDoc(doc(firestoreDb, 'products', prodId), newProd), 8000);
-    } catch (err) {
+      await withTimeout(setDoc(doc(firestoreDb, 'products', prodId), newProd), 10000);
+      const snap = await getDoc(doc(firestoreDb, 'products', prodId));
+      if (!snap.exists()) {
+        throw new ApiError(500, `Verification failed: Product ${prodId} was not found after write.`);
+      }
+      return { id: snap.id, ...snap.data() } as Product;
+    } catch (err: any) {
       logError('createProduct', err);
+      const code = err.code || 'UNKNOWN';
+      throw new ApiError(500, `[Firestore Error on products/${prodId} (${code})]: ${err.message || err}`);
     }
-    return newProd;
   },
 
   updateProduct: async (id: string, data: Partial<Product>): Promise<Product> => {
     try {
       const prodRef = doc(firestoreDb, 'products', id);
-      await withTimeout(updateDoc(prodRef, data), 8000);
+      await withTimeout(setDoc(prodRef, data, { merge: true }), 10000);
       const snap = await getDoc(prodRef);
+      if (!snap.exists()) {
+        throw new ApiError(404, `Product ${id} not found after write`);
+      }
       return { id: snap.id, ...snap.data() } as Product;
-    } catch (err) {
+    } catch (err: any) {
       logError('updateProduct', err, { id });
-      throw new ApiError(500, 'Failed to update product');
+      const code = err.code || 'UNKNOWN';
+      throw new ApiError(500, `[Firestore Error on update products/${id} (${code})]: ${err.message || err}`);
     }
   },
 
   deleteProduct: async (id: string): Promise<{ success: boolean }> => {
     try {
-      await withTimeout(deleteDoc(doc(firestoreDb, 'products', id)), 8000);
+      await withTimeout(deleteDoc(doc(firestoreDb, 'products', id)), 10000);
       return { success: true };
-    } catch (err) {
+    } catch (err: any) {
       logError('deleteProduct', err, { id });
-      throw new ApiError(500, 'Failed to delete product');
+      const code = err.code || 'UNKNOWN';
+      throw new ApiError(500, `[Firestore Error on delete products/${id} (${code})]: ${err.message || err}`);
     }
   },
 
@@ -829,18 +1157,17 @@ export const api = {
       const q = companyId
         ? query(collection(firestoreDb, 'productCategories'), where('companyId', '==', companyId))
         : collection(firestoreDb, 'productCategories');
-      const snap = await withTimeout(getDocs(q), 8000);
-      if (!snap.empty) {
-        return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ProductCategory));
-      }
-    } catch (err) {
+      const snap = await withTimeout(getDocs(q), 10000, 'Fetching categories timed out');
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ProductCategory));
+    } catch (err: any) {
       logError('getProductCategories', err, { companyId });
+      const code = err.code || 'UNKNOWN';
+      throw new ApiError(500, `[Firestore Error on productCategories query (${code})]: ${err.message || err}`);
     }
-    return [];
   },
 
   createProductCategory: async (data: Partial<ProductCategory>): Promise<ProductCategory> => {
-    const catId = `cat_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const catId = data.id || `cat_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const newCat: ProductCategory = {
       id: catId,
       companyId: data.companyId || 'comp_1',
@@ -849,20 +1176,27 @@ export const api = {
       sortOrder: data.sortOrder || 0,
     };
     try {
-      await withTimeout(setDoc(doc(firestoreDb, 'productCategories', catId), newCat), 8000);
-    } catch (err) {
+      await withTimeout(setDoc(doc(firestoreDb, 'productCategories', catId), newCat), 10000);
+      const snap = await getDoc(doc(firestoreDb, 'productCategories', catId));
+      if (!snap.exists()) {
+        throw new ApiError(500, `Verification failed: Category ${catId} was not found after write.`);
+      }
+      return { id: snap.id, ...snap.data() } as ProductCategory;
+    } catch (err: any) {
       logError('createProductCategory', err);
+      const code = err.code || 'UNKNOWN';
+      throw new ApiError(500, `[Firestore Error on productCategories/${catId} (${code})]: ${err.message || err}`);
     }
-    return newCat;
   },
 
   deleteProductCategory: async (id: string): Promise<{ success: boolean }> => {
     try {
-      await withTimeout(deleteDoc(doc(firestoreDb, 'productCategories', id)), 8000);
+      await withTimeout(deleteDoc(doc(firestoreDb, 'productCategories', id)), 10000);
       return { success: true };
-    } catch (err) {
+    } catch (err: any) {
       logError('deleteProductCategory', err, { id });
-      throw new ApiError(500, 'Failed to delete category');
+      const code = err.code || 'UNKNOWN';
+      throw new ApiError(500, `[Firestore Error on delete productCategories/${id} (${code})]: ${err.message || err}`);
     }
   },
 
@@ -872,14 +1206,13 @@ export const api = {
       const q = companyId
         ? query(collection(firestoreDb, 'qrConfigs'), where('companyId', '==', companyId))
         : collection(firestoreDb, 'qrConfigs');
-      const snap = await withTimeout(getDocs(q), 8000);
-      if (!snap.empty) {
-        return snap.docs.map((d) => ({ id: d.id, ...d.data() } as QrConfig));
-      }
-    } catch (err) {
+      const snap = await withTimeout(getDocs(q), 10000, 'Fetching QR configs timed out');
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as QrConfig));
+    } catch (err: any) {
       logError('getQrs', err, { companyId });
+      const code = err.code || 'UNKNOWN';
+      throw new ApiError(500, `[Firestore Error on qrConfigs query (${code})]: ${err.message || err}`);
     }
-    return [];
   },
 
   generateQr: async (params: {
@@ -917,11 +1250,17 @@ export const api = {
       createdAt: new Date().toISOString(),
     };
     try {
-      await withTimeout(setDoc(doc(firestoreDb, 'qrConfigs', qrId), newQr), 8000);
-    } catch (err) {
+      await withTimeout(setDoc(doc(firestoreDb, 'qrConfigs', qrId), newQr), 10000);
+      const snap = await getDoc(doc(firestoreDb, 'qrConfigs', qrId));
+      if (!snap.exists()) {
+        throw new ApiError(500, `Verification failed: QR Config ${qrId} was not found after write.`);
+      }
+      return { id: snap.id, ...snap.data() } as QrConfig;
+    } catch (err: any) {
       logError('saveQrConfig', err);
+      const code = err.code || 'UNKNOWN';
+      throw new ApiError(500, `[Firestore Error on qrConfigs/${qrId} (${code})]: ${err.message || err}`);
     }
-    return newQr;
   },
 
   createQr: async (data: Partial<QrConfig>): Promise<QrConfig> => {
@@ -930,11 +1269,12 @@ export const api = {
 
   deleteQr: async (id: string): Promise<{ success: boolean }> => {
     try {
-      await withTimeout(deleteDoc(doc(firestoreDb, 'qrConfigs', id)), 8000);
+      await withTimeout(deleteDoc(doc(firestoreDb, 'qrConfigs', id)), 10000);
       return { success: true };
-    } catch (err) {
+    } catch (err: any) {
       logError('deleteQr', err, { id });
-      return { success: true };
+      const code = err.code || 'UNKNOWN';
+      throw new ApiError(500, `[Firestore Error on delete qrConfigs/${id} (${code})]: ${err.message || err}`);
     }
   },
 

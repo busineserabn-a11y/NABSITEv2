@@ -6,7 +6,7 @@
 export type Role = 'OWNER' | 'ADMIN' | 'SUB_ADMIN' | 'VISITOR';
 
 export type CompanyStatus = 'draft' | 'active' | 'suspended' | 'archived';
-export type WebsiteStatus = 'draft' | 'published' | 'unpublished';
+export type WebsiteStatus = 'draft' | 'published' | 'unpublished' | 'suspended' | 'archived';
 export type LeadStatus =
   | 'new'
   | 'contacted'
