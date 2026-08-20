@@ -51,13 +51,15 @@ export const app: FirebaseApp = appInstance;
 export const auth: Auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
+const databaseId = metaEnv.VITE_FIRESTORE_DATABASE_ID || "default";
+
 let firestoreInstance: Firestore;
 try {
   firestoreInstance = initializeFirestore(app, {
     experimentalForceLongPolling: true,
-  });
+  }, databaseId);
 } catch {
-  firestoreInstance = getFirestore(app);
+  firestoreInstance = getFirestore(app, databaseId);
 }
 
 export const db: Firestore = firestoreInstance;

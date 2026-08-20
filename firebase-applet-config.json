@@ -3,7 +3,7 @@
   "appId": "1:692759105114:web:99dff8989fb00666ac9263",
   "apiKey": "AIzaSyDroAUS_-acMmG9JVMp25hTbzqf1KO7RAU",
   "authDomain": "nabsite-master-specification.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-nabsite-765f26c2-e8d3-4e9b-9fe8-3a56333fab21",
+  "firestoreDatabaseId": "default",
   "storageBucket": "nabsite-master-specification.firebasestorage.app",
   "messagingSenderId": "692759105114",
   "measurementId": "",

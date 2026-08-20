@@ -51,59 +51,56 @@ service cloud.firestore {
     // Companies Collection
     match /companies/{companyId} {
       allow read: if true;
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isOwner();
+      allow write: if isSignedIn();
     }
 
     // Websites Collection
     match /websites/{websiteId} {
       allow read: if true;
-      allow create, update: if isSignedIn();
-      allow delete: if isOwner();
+      allow write: if isSignedIn();
     }
 
     // Products & Menu Items
     match /products/{productId} {
       allow read: if true;
-      allow create, update, delete: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     // Product Categories
     match /productCategories/{catId} {
       allow read: if true;
-      allow create, update, delete: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     // QR Configurations
     match /qrConfigs/{qrId} {
       allow read: if true;
-      allow create, update, delete: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     // Reviews Collection
     match /reviews/{reviewId} {
       allow read: if true;
       allow create: if true;
-      allow update, delete: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     // Offers & Specials
     match /offers/{offerId} {
       allow read: if true;
-      allow create, update, delete: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     // Announcements
     match /announcements/{announcementId} {
       allow read: if true;
-      allow create, update, delete: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     // Public Leads / Inquiries
     match /leads/{leadId} {
       allow create: if true;
-      allow read, update, delete: if isSignedIn();
+      allow read, write: if isSignedIn();
     }
 
     // Audit Logs (Zero-Trust Immutable)
@@ -123,7 +120,7 @@ service cloud.firestore {
     // Platform Settings & Showcase
     match /settings/{settingDoc} {
       allow read: if true;
-      allow write: if isOwner() || isSignedIn();
+      allow write: if isSignedIn();
     }
   }
 }
