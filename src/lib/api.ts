@@ -331,13 +331,16 @@ export const api = {
         navigation: [
           { id: 'nav_home', label: 'Home', type: 'page', target: 'home', order: 1 },
           { id: 'nav_menu', label: 'Menu & Offerings', type: 'page', target: 'menu', order: 2 },
-          { id: 'nav_contact', label: 'Contact', type: 'page', target: 'contact', order: 3 },
+          { id: 'nav_about', label: 'About Us', type: 'page', target: 'about', order: 3 },
+          { id: 'nav_contact', label: 'Contact', type: 'page', target: 'contact', order: 4 },
         ],
         pages: [
           {
             id: 'page_home',
+            name: 'Home',
             title: 'Home',
             slug: 'home',
+            isHome: true,
             isPublished: true,
             showInNavigation: true,
             sections: [
@@ -346,6 +349,85 @@ export const api = {
                 type: 'hero',
                 title: newCompany.name,
                 subtitle: newCompany.shortDescription,
+                isVisible: true,
+                order: 1,
+              },
+              {
+                id: 'sec_featured',
+                type: 'products',
+                title: 'Featured Selection',
+                subtitle: 'Handcrafted quality and signature favorites',
+                isVisible: true,
+                order: 2,
+              },
+              {
+                id: 'sec_hours',
+                type: 'hours',
+                title: 'Business Hours & Location',
+                subtitle: 'Visit our establishment in Addis Ababa',
+                isVisible: true,
+                order: 3,
+              },
+            ],
+          },
+          {
+            id: 'page_menu',
+            name: 'Menu & Offerings',
+            title: 'Digital Menu & Offerings',
+            slug: 'menu',
+            isPublished: true,
+            showInNavigation: true,
+            sections: [
+              {
+                id: 'sec_menu_hero',
+                type: 'hero',
+                title: 'Full Menu & Catalog',
+                subtitle: 'Discover our comprehensive range of products and services',
+                isVisible: true,
+                order: 1,
+              },
+              {
+                id: 'sec_menu_items',
+                type: 'products',
+                title: 'All Offerings',
+                subtitle: 'Freshly prepared and curated daily',
+                isVisible: true,
+                order: 2,
+              },
+            ],
+          },
+          {
+            id: 'page_about',
+            name: 'About Us',
+            title: 'About Our Business',
+            slug: 'about',
+            isPublished: true,
+            showInNavigation: true,
+            sections: [
+              {
+                id: 'sec_about_story',
+                type: 'about',
+                title: 'Our Heritage & Mission',
+                subtitle: `Learn more about ${newCompany.name}`,
+                content: newCompany.shortDescription,
+                isVisible: true,
+                order: 1,
+              },
+            ],
+          },
+          {
+            id: 'page_contact',
+            name: 'Contact',
+            title: 'Contact & Inquiries',
+            slug: 'contact',
+            isPublished: true,
+            showInNavigation: true,
+            sections: [
+              {
+                id: 'sec_contact_info',
+                type: 'contact',
+                title: 'Get in Touch',
+                subtitle: 'Call, message on Telegram, or visit us in person',
                 isVisible: true,
                 order: 1,
               },
@@ -380,22 +462,64 @@ export const api = {
       createdAt: nowIso,
     };
 
+    // Step-by-step write with exact error isolation
     try {
-      // Atomic Batch Write: Company + Website + Initial QR
-      const batch = writeBatch(firestoreDb);
-      batch.set(doc(firestoreDb, 'companies', compId), newCompany);
-      batch.set(doc(firestoreDb, 'websites', webId), newWebsite);
-      batch.set(doc(firestoreDb, 'qrConfigs', qrId), initialQr);
+      // 1. Write Company Document
+      try {
+        await withTimeout(
+          setDoc(doc(firestoreDb, 'companies', compId), newCompany),
+          8000,
+          'Writing company document to Firestore timed out'
+        );
+      } catch (compErr: any) {
+        const code = compErr.code || 'UNKNOWN';
+        const msg = compErr.message || String(compErr);
+        throw new ApiError(500, `[Firestore Error on companies/${compId} (${code})]: ${msg}`);
+      }
 
-      await withTimeout(batch.commit(), 12000, 'Company creation timed out. Please retry.');
+      // 2. Write Website Document
+      try {
+        await withTimeout(
+          setDoc(doc(firestoreDb, 'websites', webId), newWebsite),
+          8000,
+          'Writing website document to Firestore timed out'
+        );
+      } catch (webErr: any) {
+        const code = webErr.code || 'UNKNOWN';
+        const msg = webErr.message || String(webErr);
+        console.warn(`[Non-fatal website init notice on websites/${webId} (${code})]:`, msg);
+      }
 
-      await logAudit('CREATE', 'COMPANY', compId, `Created company ${newCompany.name} (slug: ${slug})`, newCompany.name);
+      // 3. Write QR Configuration
+      try {
+        await withTimeout(
+          setDoc(doc(firestoreDb, 'qrConfigs', qrId), initialQr),
+          8000,
+          'Writing QR configuration to Firestore timed out'
+        );
+      } catch (qrErr: any) {
+        const code = qrErr.code || 'UNKNOWN';
+        const msg = qrErr.message || String(qrErr);
+        console.warn(`[Non-fatal QR init notice on qrConfigs/${qrId} (${code})]:`, msg);
+      }
+
+      // 4. Verification Check: Read back the company document from Firestore to verify persistence
+      const verifySnap = await getDoc(doc(firestoreDb, 'companies', compId));
+      if (!verifySnap.exists()) {
+        throw new ApiError(500, `Verification failed: Company ${compId} was not found in Firestore after write.`);
+      }
+
+      // 5. Non-blocking audit log
+      logAudit('CREATE', 'COMPANY', compId, `Created enterprise ${newCompany.name} (slug: ${slug})`, newCompany.name).catch(() => {});
+
+      return { id: verifySnap.id, ...verifySnap.data() } as Company;
     } catch (err: any) {
       logError('createCompany', err, { compId, slug });
-      throw new ApiError(500, `Failed to create company: ${err.message}`);
+      if (err instanceof ApiError) {
+        throw err;
+      }
+      throw new ApiError(500, `Failed to create company: ${err.message || String(err)}`);
     }
-
-    return newCompany;
   },
 
   updateCompany: async (id: string, data: Partial<Company>): Promise<Company> => {

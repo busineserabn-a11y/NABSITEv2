@@ -54,7 +54,7 @@ export const googleProvider = new GoogleAuthProvider();
 let firestoreInstance: Firestore;
 try {
   firestoreInstance = initializeFirestore(app, {
-    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: true,
   });
 } catch {
   firestoreInstance = getFirestore(app);

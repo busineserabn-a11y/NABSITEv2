@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Mail, Lock, KeyRound, CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, KeyRound, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -61,12 +61,6 @@ export const PlatformAccessPage: React.FC = () => {
     } finally {
       setResetLoading(false);
     }
-  };
-
-  const fillOwnerCredentials = () => {
-    setEmail('abenezarofficial1@gmail.com');
-    setPassword('NaB-is-ABN');
-    setError(null);
   };
 
   return (
@@ -144,16 +138,7 @@ export const PlatformAccessPage: React.FC = () => {
               onChange={(e) => setPassword(e.target.value)}
             />
 
-            <div className="flex items-center justify-between pt-1">
-              <button
-                type="button"
-                onClick={fillOwnerCredentials}
-                className="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 transition-colors"
-              >
-                <Sparkles className="w-3 h-3 text-amber-400" />
-                <span>Fill Owner Credentials</span>
-              </button>
-
+            <div className="flex items-center justify-end pt-1">
               <button
                 type="button"
                 onClick={() => {

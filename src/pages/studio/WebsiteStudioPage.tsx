@@ -200,24 +200,39 @@ export const WebsiteStudioPage: React.FC = () => {
     setLoading(true);
     setLoadError(null);
     try {
-      let compData: any = null;
-      let webData: any = null;
+      let compData: Company | null = null;
+      let webData: Website | null = null;
 
+      // 1. Try to load company by ID or Slug
       try {
-        const res: any = await api.getCompany(id);
-        compData = res?.company || res;
-        webData = res?.website || null;
-      } catch (e) {
+        compData = await api.getCompany(id);
+      } catch {
+        // ID might be a website ID
         try {
-          const webRes: any = await api.getWebsite(id);
-          webData = webRes?.website || webRes;
-          compData = webRes?.company || null;
-        } catch (e2) {
-          console.error('Failed to load by company or website ID', e2);
+          webData = await api.getWebsite(id);
+          if (webData?.companyId) {
+            compData = await api.getCompany(webData.companyId).catch(() => null);
+          }
+        } catch {
+          // Both lookups failed
         }
       }
 
-      if (compData) setCompany(compData);
+      // 2. If company was found but website not yet loaded, load company's website
+      if (compData && !webData) {
+        try {
+          webData = await api.getWebsite(compData.websiteId || compData.id);
+        } catch (e) {
+          console.warn('Website not found for company, falling back to initialized config:', e);
+        }
+      }
+
+      if (compData) {
+        setCompany(compData);
+      } else {
+        setLoadError(`Unable to find company with ID or Slug "${id}".`);
+      }
+
       if (webData) {
         setWebsite(webData);
         if (webData.themeId) setSelectedThemeId(webData.themeId);
@@ -241,12 +256,8 @@ export const WebsiteStudioPage: React.FC = () => {
       setReviews(revRes || []);
       setOffers(offRes || []);
       setAnnouncements(annRes || []);
-
-      if (!compData) {
-        setLoadError(`Unable to find company with ID or Slug "${id}".`);
-      }
     } catch (err: any) {
-      console.error(err);
+      console.error('Studio initialization error:', err);
       setLoadError(err.message || 'Failed to initialize Website Studio.');
     } finally {
       setLoading(false);

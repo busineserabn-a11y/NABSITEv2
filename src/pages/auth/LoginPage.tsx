@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, User as UserIcon, ShieldCheck, AlertTriangle, KeyRound, ArrowRight, CheckCircle2, UserPlus, LogIn } from 'lucide-react';
+import { Lock, Mail, AlertTriangle, KeyRound, CheckCircle2, LogIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -8,10 +8,8 @@ import { Card } from '../../components/ui/Card';
 import { Modal } from '../../components/ui/Modal';
 
 export const LoginPage: React.FC = () => {
-  const [tab, setTab] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -23,7 +21,7 @@ export const LoginPage: React.FC = () => {
   const [resetSuccess, setResetSuccess] = useState<string | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
-  const { login, register, resetPassword, isConfigured, missingConfigKeys } = useAuth();
+  const { login, resetPassword, isConfigured, missingConfigKeys } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,14 +32,8 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      let loggedUser;
-      if (tab === 'register') {
-        loggedUser = await register(email, password, name || undefined);
-        setSuccessMsg('Account created successfully! Redirecting...');
-      } else {
-        loggedUser = await login(email, password);
-        setSuccessMsg('Authentication successful! Redirecting...');
-      }
+      const loggedUser = await login(email, password);
+      setSuccessMsg('Authentication successful! Redirecting...');
 
       // Fast role-based redirect
       setTimeout(() => {
@@ -56,7 +48,7 @@ export const LoginPage: React.FC = () => {
         }
       }, 300);
     } catch (err: any) {
-      setError(err.message || (tab === 'register' ? 'Registration failed.' : 'Authentication failed.'));
+      setError(err.message || 'Authentication failed.');
       setLoading(false);
     }
   };
@@ -88,12 +80,10 @@ export const LoginPage: React.FC = () => {
             N
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            {tab === 'login' ? 'Sign in to NABSITE' : 'Create NABSITE Account'}
+            Sign in to NABSITE
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
-            {tab === 'login'
-              ? 'Authorized portal access for platform administrators and company managers.'
-              : 'Register your staff or company manager profile for instant workspace access.'}
+            Authorized portal access for platform administrators and company managers.
           </p>
         </div>
 
@@ -116,42 +106,6 @@ export const LoginPage: React.FC = () => {
 
         {/* Auth Card */}
         <Card variant="bordered" padding="lg" className="space-y-5 shadow-xl bg-slate-900 border-slate-800">
-          {/* Tab Switcher */}
-          <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800">
-            <button
-              type="button"
-              onClick={() => {
-                setTab('login');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${
-                tab === 'login'
-                  ? 'bg-amber-500 text-slate-950 shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Sign In</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTab('register');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${
-                tab === 'register'
-                  ? 'bg-amber-500 text-slate-950 shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Register</span>
-            </button>
-          </div>
-
           {error && (
             <div className="p-3 bg-rose-950/80 border border-rose-800 text-rose-300 text-xs font-medium rounded-xl leading-relaxed flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
@@ -167,18 +121,6 @@ export const LoginPage: React.FC = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {tab === 'register' && (
-              <Input
-                label="Full Name"
-                type="text"
-                required
-                placeholder="e.g. John Doe"
-                icon={UserIcon}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            )}
-
             <Input
               label="Email Address"
               type="email"
@@ -194,29 +136,27 @@ export const LoginPage: React.FC = () => {
               label="Password"
               type="password"
               required
-              autoComplete={tab === 'register' ? 'new-password' : 'current-password'}
+              autoComplete="current-password"
               placeholder="••••••••"
               icon={Lock}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
 
-            {tab === 'login' && (
-              <div className="flex items-center justify-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setResetEmail(email);
-                    setResetError(null);
-                    setResetSuccess(null);
-                    setForgotModalOpen(true);
-                  }}
-                  className="text-xs text-amber-400 hover:text-amber-300 hover:underline transition-colors"
-                >
-                  Forgot password?
-                </button>
-              </div>
-            )}
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setResetEmail(email);
+                  setResetError(null);
+                  setResetSuccess(null);
+                  setForgotModalOpen(true);
+                }}
+                className="text-xs text-amber-400 hover:text-amber-300 hover:underline transition-colors"
+              >
+                Forgot password?
+              </button>
+            </div>
 
             <Button
               type="submit"
@@ -225,13 +165,7 @@ export const LoginPage: React.FC = () => {
               disabled={loading}
               className="w-full font-bold text-slate-950 shadow-md transition-all active:scale-[0.99]"
             >
-              {loading
-                ? tab === 'register'
-                  ? 'Creating Account...'
-                  : 'Authenticating...'
-                : tab === 'register'
-                ? 'Create Account'
-                : 'Sign In'}
+              {loading ? 'Authenticating...' : 'Sign In'}
             </Button>
           </form>
         </Card>
