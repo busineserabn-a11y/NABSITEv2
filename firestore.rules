@@ -122,5 +122,28 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isSignedIn();
     }
+
+    // Categories
+    match /categories/{catId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Showcase
+    match /showcase/{itemId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Themes & Features
+    match /themes/{themeId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /features/{featureId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
   }
 }
