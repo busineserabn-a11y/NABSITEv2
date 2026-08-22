@@ -74,7 +74,7 @@ export const CompanyProductsPage: React.FC = () => {
     setForm({
       name: p.name,
       description: p.description || '',
-      price: p.price,
+      price: Number(p.price) || 0,
       currency: p.currency || 'ETB',
       categoryId: p.categoryId,
       image: p.image || '',

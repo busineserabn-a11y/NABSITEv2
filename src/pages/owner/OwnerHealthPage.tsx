@@ -545,22 +545,22 @@ export const OwnerHealthPage: React.FC = () => {
                   <span className="text-[11px] font-mono text-slate-400">{step.latencyMs}ms</span>
                 )}
                 {step.status === 'pass' && (
-                  <Badge variant="emerald" size="sm">
+                  <Badge variant="active" size="sm">
                     <Check className="w-3 h-3 mr-1" /> PASS
                   </Badge>
                 )}
                 {step.status === 'fail' && (
-                  <Badge variant="rose" size="sm">
+                  <Badge variant="danger" size="sm">
                     <XCircle className="w-3 h-3 mr-1" /> FAIL
                   </Badge>
                 )}
                 {step.status === 'running' && (
-                  <Badge variant="amber" size="sm">
+                  <Badge variant="gold" size="sm">
                     <RefreshCw className="w-3 h-3 mr-1 animate-spin" /> RUNNING
                   </Badge>
                 )}
                 {step.status === 'pending' && (
-                  <Badge variant="slate" size="sm">
+                  <Badge variant="neutral" size="sm">
                     PENDING
                   </Badge>
                 )}

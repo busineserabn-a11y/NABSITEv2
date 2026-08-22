@@ -114,7 +114,7 @@ export const HomePage: React.FC = () => {
 
   const filteredCompanies = companies.filter((c) => {
     if (selectedCategory !== 'all') {
-      return c.category.toLowerCase().includes(selectedCategory.toLowerCase());
+      return (c.category || '').toLowerCase().includes(selectedCategory.toLowerCase());
     }
     return true;
   });
@@ -389,7 +389,7 @@ export const HomePage: React.FC = () => {
                         <span className="font-bold text-white">4.9</span>
                       </div>
                       <span>•</span>
-                      <span className="truncate">📍 {comp.address.split(',')[0]}</span>
+                      <span className="truncate">📍 {(comp.address || 'Addis Ababa').split(',')[0]}</span>
                     </div>
                   </div>
 
@@ -515,7 +515,7 @@ export const HomePage: React.FC = () => {
                   </p>
                   <div className="flex flex-wrap gap-2 text-[11px] text-slate-400">
                     <span className="px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/50">
-                      📍 {company.address.split(',')[0]}
+                      📍 {(company.address || 'Addis Ababa').split(',')[0]}
                     </span>
                     {company.phone && (
                       <span className="px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/50">

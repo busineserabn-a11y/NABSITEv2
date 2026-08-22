@@ -12,7 +12,7 @@ export const CompanyWebsitePage: React.FC = () => {
   const navigate = useNavigate();
   const [data, setData] = useState<{
     company: Company;
-    website: Website;
+    website?: Website;
     products?: Product[];
     productCategories?: ProductCategory[];
     reviews?: Review[];

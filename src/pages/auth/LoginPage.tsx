@@ -176,7 +176,7 @@ export const LoginPage: React.FC = () => {
         isOpen={forgotModalOpen}
         onClose={() => setForgotModalOpen(false)}
         title="Reset Password"
-        size="sm"
+        maxWidth="sm"
       >
         <div className="space-y-4 pt-1">
           <p className="text-xs text-slate-400">

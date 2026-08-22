@@ -338,7 +338,7 @@ Please sign in and change your password in settings upon first login.`;
             header: 'Role',
             render: (u: User) => (
               <Badge
-                variant={u.role === 'OWNER' ? 'warning' : u.role === 'ADMIN' ? 'info' : 'neutral'}
+                variant={u.role === 'OWNER' ? 'gold' : u.role === 'ADMIN' ? 'info' : 'neutral'}
                 size="sm"
               >
                 {u.role}
@@ -608,7 +608,7 @@ Please sign in and change your password in settings upon first login.`;
 
               <div className="flex justify-between items-center pb-2 border-b border-slate-800 text-xs">
                 <span className="text-slate-400">Assigned Role</span>
-                <Badge variant={createdCredentials.role === 'ADMIN' ? 'warning' : 'neutral'} size="sm">
+                <Badge variant={createdCredentials.role === 'ADMIN' ? 'gold' : 'neutral'} size="sm">
                   {createdCredentials.role === 'ADMIN' ? 'Platform Admin' : 'Company Sub-Admin'}
                 </Badge>
               </div>

@@ -217,9 +217,9 @@ export const OwnerCompaniesPage: React.FC = () => {
 
   const filteredCompanies = companies.filter((c: Company) => {
     const matchesSearch =
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.category.toLowerCase().includes(search.toLowerCase()) ||
-      c.slug.toLowerCase().includes(search.toLowerCase());
+      (c.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.category || '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.slug || '').toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -536,7 +536,7 @@ export const OwnerCompaniesPage: React.FC = () => {
                     <h3 className="text-lg font-black text-slate-900 dark:text-white">
                       {createdResult.name}
                     </h3>
-                    <Badge variant="emerald" size="sm">
+                    <Badge variant="active" size="sm">
                       {createdResult.status.toUpperCase()}
                     </Badge>
                   </div>
@@ -856,7 +856,7 @@ export const OwnerCompaniesPage: React.FC = () => {
                             {selectedTpl?.description}
                           </p>
                         </div>
-                        <Badge variant="emerald" size="sm">
+                        <Badge variant="active" size="sm">
                           Default Palette
                         </Badge>
                       </div>

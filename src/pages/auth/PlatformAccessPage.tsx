@@ -171,7 +171,7 @@ export const PlatformAccessPage: React.FC = () => {
         isOpen={forgotModalOpen}
         onClose={() => setForgotModalOpen(false)}
         title="Owner Password Recovery"
-        size="sm"
+        maxWidth="sm"
       >
         <div className="space-y-4 pt-1">
           <p className="text-xs text-slate-400">

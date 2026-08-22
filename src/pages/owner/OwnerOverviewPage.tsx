@@ -143,13 +143,13 @@ export const OwnerOverviewPage: React.FC = () => {
 
   // Filtered companies
   const filteredCompanies = companies.filter((c) => {
-    if (companyTab === 'published' && c.status !== 'published') return false;
+    if (companyTab === 'published' && c.status !== 'active') return false;
     if (companyTab === 'draft' && c.status !== 'draft') return false;
     if (companyTab === 'suspended' && c.status !== 'suspended') return false;
     if (companyTab === 'archived' && c.status !== 'archived') return false;
     if (companySearch) {
       const q = companySearch.toLowerCase();
-      return c.name.toLowerCase().includes(q) || c.slug.toLowerCase().includes(q) || c.category.toLowerCase().includes(q);
+      return (c.name || '').toLowerCase().includes(q) || (c.slug || '').toLowerCase().includes(q) || (c.category || '').toLowerCase().includes(q);
     }
     return true;
   });
@@ -159,7 +159,7 @@ export const OwnerOverviewPage: React.FC = () => {
 
   // Real KPI calculations from Firestore
   const totalCompsCount = companies.length;
-  const publishedCount = companies.filter((c) => c.status === 'published').length;
+  const publishedCount = companies.filter((c) => c.status === 'active').length;
   const draftCount = companies.filter((c) => c.status === 'draft').length;
   const leadsCount = leads.length;
 
@@ -474,11 +474,11 @@ export const OwnerOverviewPage: React.FC = () => {
                     <td className="py-3.5">
                       <Badge
                         variant={
-                          c.status === 'published'
-                            ? 'success'
+                          c.status === 'active'
+                            ? 'active'
                             : c.status === 'draft'
-                            ? 'warning'
-                            : 'secondary'
+                            ? 'draft'
+                            : 'neutral'
                         }
                         size="sm"
                       >
@@ -498,12 +498,12 @@ export const OwnerOverviewPage: React.FC = () => {
                     </td>
                     <td className="py-3.5 text-right space-x-2">
                       <Link to={`/studio/${c.websiteId || c.id}`}>
-                        <Button size="xs" variant="secondary">
+                        <Button size="sm" variant="secondary">
                           Studio
                         </Button>
                       </Link>
                       <Link to={`/owner/companies/${c.id}`}>
-                        <Button size="xs" variant="primary">
+                        <Button size="sm" variant="primary">
                           Manage
                         </Button>
                       </Link>
@@ -523,7 +523,7 @@ export const OwnerOverviewPage: React.FC = () => {
             </span>
             <div className="flex items-center gap-2">
               <Button
-                size="xs"
+                size="sm"
                 variant="secondary"
                 disabled={currentPage <= 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
@@ -531,7 +531,7 @@ export const OwnerOverviewPage: React.FC = () => {
                 <ChevronLeft className="w-3 h-3" />
               </Button>
               <Button
-                size="xs"
+                size="sm"
                 variant="secondary"
                 disabled={currentPage >= totalPages}
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
@@ -566,7 +566,7 @@ export const OwnerOverviewPage: React.FC = () => {
                     {log.action}
                   </span>
                   <span className="text-slate-300">
-                    {log.resource} ({log.resourceId})
+                    {log.resourceType} ({log.resourceId})
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500 font-mono">

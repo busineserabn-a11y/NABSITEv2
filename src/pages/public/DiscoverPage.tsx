@@ -65,19 +65,23 @@ export const DiscoverPage: React.FC = () => {
   // Helper to check if company is open right now
   const isCompanyOpenNow = (company: Company): boolean => {
     if (!company.hours || company.hours.length === 0) return true;
-    const now = new Date();
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const currentDay = days[now.getDay()];
-    const todayHour = company.hours.find((h) => h.day === currentDay);
-    if (!todayHour || !todayHour.isOpen) return false;
+    try {
+      const now = new Date();
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const currentDay = days[now.getDay()];
+      const todayHour = company.hours.find((h) => h.day === currentDay);
+      if (!todayHour || !todayHour.isOpen || !todayHour.openTime || !todayHour.closeTime) return false;
 
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    const [openH, openM] = todayHour.openTime.split(':').map(Number);
-    const [closeH, closeM] = todayHour.closeTime.split(':').map(Number);
-    const openMinutes = openH * 60 + openM;
-    const closeMinutes = closeH * 60 + closeM;
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const [openH, openM] = (todayHour.openTime || '08:00').split(':').map(Number);
+      const [closeH, closeM] = (todayHour.closeTime || '22:00').split(':').map(Number);
+      const openMinutes = (openH || 0) * 60 + (openM || 0);
+      const closeMinutes = (closeH || 0) * 60 + (closeM || 0);
 
-    return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+      return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+    } catch {
+      return true;
+    }
   };
 
   return (

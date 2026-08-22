@@ -406,9 +406,9 @@ export const TemplateSwitcherModal: React.FC<TemplateSwitcherModalProps> = ({
                   <WebsiteRenderer
                     company={company}
                     website={website}
+                    themeId={selectedTheme.id}
                     config={{
                       ...config,
-                      themeId: selectedTheme.id,
                       design: {
                         ...config.design,
                         primaryColor: selectedTheme.defaultPalette.primary,
@@ -428,7 +428,6 @@ export const TemplateSwitcherModal: React.FC<TemplateSwitcherModalProps> = ({
                     offers={offers}
                     announcements={announcements}
                     activePageSlug="home"
-                    previewMode={true}
                   />
                 </div>
               </div>
@@ -450,7 +449,7 @@ export const TemplateSwitcherModal: React.FC<TemplateSwitcherModalProps> = ({
                       <span className="text-[10px] font-mono text-slate-400 uppercase">
                         Current Template:
                       </span>
-                      <Badge variant="primary" size="sm">
+                      <Badge variant="active" size="sm">
                         {currentTheme.name}
                       </Badge>
                     </div>

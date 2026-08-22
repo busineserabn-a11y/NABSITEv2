@@ -244,9 +244,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Search filtering
   const filteredSearchCompanies = companies.filter((c) =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.slug.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.category.toLowerCase().includes(searchQuery.toLowerCase())
+    (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (c.slug || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (c.category || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (!user) {
@@ -399,11 +399,11 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 flex items-center justify-center font-black text-xs shrink-0 shadow-sm">
-                {user.name.charAt(0)}
+                {(user.name || 'U').charAt(0)}
               </div>
               {!sidebarCollapsed && (
                 <div className="truncate">
-                  <p className="text-xs font-bold text-slate-100 truncate">{user.name}</p>
+                  <p className="text-xs font-bold text-slate-100 truncate">{user.name || 'User'}</p>
                   <p className="text-[10px] text-emerald-400 font-medium truncate">{user.role}</p>
                 </div>
               )}
@@ -434,7 +434,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm font-black text-white">Welcome back, {user.name.split(' ')[0]}</span>
+                <span className="text-xs sm:text-sm font-black text-white">Welcome back, {(user.name || 'Admin').split(' ')[0]}</span>
                 {isOwner && <span className="text-xs">👑</span>}
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />

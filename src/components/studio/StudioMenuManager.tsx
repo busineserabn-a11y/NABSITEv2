@@ -109,7 +109,7 @@ export const StudioMenuManager: React.FC<StudioMenuManagerProps> = ({
     setItemForm({
       name: item.name,
       categoryId: item.categoryId,
-      price: item.price,
+      price: Number(item.price) || 0,
       oldPrice: (item as any).oldPrice || 0,
       currency: item.currency || 'ETB',
       description: item.description || '',
