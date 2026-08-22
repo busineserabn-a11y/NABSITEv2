@@ -14,6 +14,7 @@ import {
   writeBatch,
   onSnapshot,
 } from 'firebase/firestore';
+import QRCode from 'qrcode';
 import { db as firestoreDb, createFirebaseAuthUser } from './firebase';
 import {
   Company,
@@ -1244,16 +1245,92 @@ export const api = {
     fgColor?: string;
     bgColor?: string;
     margin?: number;
-  }): Promise<{ dataUrl: string; normalizedUrl: string }> => {
-    const res = await fetch('/api/qr/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
-    });
-    if (!res.ok) {
-      throw new ApiError(res.status, 'Failed to generate QR Code');
+  }): Promise<{ dataUrl: string; normalizedUrl: string; svgString?: string }> => {
+    let normalized = (params.url || '').trim();
+    if (!normalized) {
+      normalized = 'https://nabsite.et';
     }
-    return res.json();
+    if (!/^https?:\/\//i.test(normalized)) {
+      normalized = `https://${normalized}`;
+    }
+
+    const qrSize = Math.min(Math.max(Number(params.size) || 360, 100), 2048);
+    const qrMargin = typeof params.margin === 'number' ? Math.max(0, Math.min(params.margin, 10)) : 2;
+    const darkColor = params.fgColor || '#0F172A';
+    const lightColor = params.bgColor || '#FFFFFF';
+
+    try {
+      // 1. Instant client-side generation via QRCode library
+      const dataUrl = await QRCode.toDataURL(normalized, {
+        width: qrSize,
+        margin: qrMargin,
+        color: {
+          dark: darkColor,
+          light: lightColor,
+        },
+        errorCorrectionLevel: 'H',
+      });
+
+      let svgString: string | undefined;
+      try {
+        svgString = await QRCode.toString(normalized, {
+          type: 'svg',
+          margin: qrMargin,
+          color: {
+            dark: darkColor,
+            light: lightColor,
+          },
+          errorCorrectionLevel: 'H',
+        });
+      } catch {
+        // svg is optional
+      }
+
+      return { dataUrl, normalizedUrl: normalized, svgString };
+    } catch (clientErr) {
+      console.warn('Client-side QR generation encountered fallback, trying server endpoint:', clientErr);
+      try {
+        const res = await fetch('/api/qr/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: normalized,
+            size: qrSize,
+            fgColor: darkColor,
+            bgColor: lightColor,
+            margin: qrMargin,
+          }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          return { dataUrl: json.dataUrl, normalizedUrl: json.normalizedUrl || normalized };
+        }
+      } catch (serverErr) {
+        console.error('Server-side QR endpoint also failed:', serverErr);
+      }
+      throw new ApiError(500, 'Failed to generate QR Code. Please check destination URL format.');
+    }
+  },
+
+  generateQrSvg: async (params: {
+    url: string;
+    fgColor?: string;
+    bgColor?: string;
+    margin?: number;
+  }): Promise<string> => {
+    let normalized = (params.url || '').trim();
+    if (!normalized) normalized = 'https://nabsite.et';
+    if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
+
+    return await QRCode.toString(normalized, {
+      type: 'svg',
+      margin: typeof params.margin === 'number' ? params.margin : 2,
+      color: {
+        dark: params.fgColor || '#0F172A',
+        light: params.bgColor || '#FFFFFF',
+      },
+      errorCorrectionLevel: 'H',
+    });
   },
 
   saveQrConfig: async (data: Partial<QrConfig>): Promise<QrConfig> => {
@@ -1261,16 +1338,24 @@ export const api = {
     const newQr: QrConfig = {
       id: qrId,
       companyId: data.companyId || '',
+      name: data.name || data.title || 'Official Digital Stand',
+      title: data.title || data.name || 'Official Digital Stand',
       targetUrl: data.targetUrl || 'https://nabsite.et',
-      title: data.title || 'Official Digital Stand',
+      targetType: data.targetType || 'website',
+      pageSlug: data.pageSlug || '',
       caption: data.caption || 'SCAN WITH PHONE CAMERA',
       fgColor: data.fgColor || '#0F172A',
       bgColor: data.bgColor || '#FFFFFF',
       size: data.size || 400,
-      margin: data.margin || 2,
+      margin: data.margin ?? 2,
+      frame: data.frame || 'badge',
       frameStyle: data.frameStyle || 'badge',
-      scanCount: 0,
-      createdAt: new Date().toISOString(),
+      startDate: data.startDate || new Date().toISOString().split('T')[0],
+      expiryDate: data.expiryDate || '',
+      duration: data.duration || 'permanent',
+      scanCount: data.scanCount || 0,
+      createdAt: data.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     try {
       await withTimeout(setDoc(doc(firestoreDb, 'qrConfigs', qrId), newQr), 10000);

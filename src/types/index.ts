@@ -501,6 +501,7 @@ export interface QrConfig {
   title?: string;
   targetUrl: string;
   targetType?: 'website' | 'store' | 'menu' | 'offer' | 'contact' | 'custom_page' | 'custom_url';
+  pageSlug?: string;
   frame?: 'none' | 'simple' | 'badge' | 'card' | 'speech_bubble';
   frameStyle?: string;
   caption?: string;
@@ -510,6 +511,9 @@ export interface QrConfig {
   logo?: string;
   size?: number;
   margin?: number;
+  startDate?: string;
+  expiryDate?: string;
+  duration?: string;
   scanCount: number;
   createdAt: string;
   updatedAt?: string;

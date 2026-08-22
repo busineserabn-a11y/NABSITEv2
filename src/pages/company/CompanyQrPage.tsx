@@ -72,8 +72,8 @@ export const CompanyQrPage: React.FC = () => {
       });
       setQrDataUrl(res.dataUrl);
       setNormalizedUrl(res.normalizedUrl);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Company QR generation notice:', err);
     } finally {
       setGenerating(false);
     }
