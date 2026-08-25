@@ -452,11 +452,19 @@ export interface Announcement {
   title: string;
   content: string;
   image?: string;
-  status: AnnouncementStatus;
-  publishDate: string;
+  status?: AnnouncementStatus;
+  publishDate?: string;
   ctaText?: string;
   ctaUrl?: string;
   featured?: boolean;
+  category?: 'Academic' | 'Event' | 'Holiday' | 'General' | 'Arabic' | 'PTA' | string;
+  description?: string;
+  priority?: 'normal' | 'high' | 'urgent';
+  pinned?: boolean;
+  author?: string;
+  date?: string;
+  tags?: string[];
+  attachmentUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -34,6 +34,13 @@ import {
   Building2,
   Utensils,
   ShoppingBag,
+  GraduationCap,
+  BookOpen,
+  FileText,
+  Library,
+  Megaphone,
+  Newspaper,
+  School,
 } from 'lucide-react';
 import {
   Company,
@@ -102,6 +109,10 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
   const [faqExpanded, setFaqExpanded] = useState<Record<number, boolean>>({ 0: true });
   const [selectedDetailItem, setSelectedDetailItem] = useState<Product | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
+  const [announcementModalOpen, setAnnouncementModalOpen] = useState(false);
+  const [announcementSearchQuery, setAnnouncementSearchQuery] = useState('');
+  const [selectedAnnCategory, setSelectedAnnCategory] = useState('all');
 
   const activeThemeId = themeId || website?.themeId || 'theme_corporate';
   const theme = THEME_REGISTRY.find((t) => t.id === activeThemeId) || THEME_REGISTRY[0];
@@ -959,7 +970,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
   };
 
   // -------------------------------------------------------------
-  // CONTACT & DIRECT CHANNELS SECTION
+  // CONTACT & DIRECT CHANNELS SECTION (Mobile-optimized with text wrapping)
   // -------------------------------------------------------------
   const renderContactSection = () => {
     return (
@@ -982,14 +993,14 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
             <a
               href={`tel:${company.phone}`}
               onClick={() => api.recordEvent({ companyId: company.id, eventType: 'CALL_CLICK', path: `/c/${company.slug}` })}
-              className="p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 transition-all text-center space-y-3 shadow-xs group"
+              className="p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 transition-all text-center space-y-3 shadow-xs group min-w-0 max-w-full w-full overflow-hidden block"
             >
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 mx-auto flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 mx-auto flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
                 <Phone className="w-6 h-6" />
               </div>
-              <div>
+              <div className="min-w-0 w-full">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Phone Hotline</p>
-                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">{company.phone}</p>
+                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1 break-all sm:break-words">{company.phone}</p>
               </div>
             </a>
           )}
@@ -1000,14 +1011,14 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
               target="_blank"
               rel="noreferrer"
               onClick={() => api.recordEvent({ companyId: company.id, eventType: 'TELEGRAM_CLICK', path: `/c/${company.slug}` })}
-              className="p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-400 transition-all text-center space-y-3 shadow-xs group"
+              className="p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-400 transition-all text-center space-y-3 shadow-xs group min-w-0 max-w-full w-full overflow-hidden block"
             >
-              <div className="w-12 h-12 rounded-2xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 mx-auto flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-2xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 mx-auto flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
                 <Send className="w-6 h-6" />
               </div>
-              <div>
+              <div className="min-w-0 w-full">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Telegram Channel</p>
-                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">@{company.telegramUsername}</p>
+                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1 break-all sm:break-words">@{company.telegramUsername}</p>
               </div>
             </a>
           )}
@@ -1015,19 +1026,700 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
           {company.email && (
             <a
               href={`mailto:${company.email}`}
-              className="p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 transition-all text-center space-y-3 shadow-xs group"
+              className="p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 transition-all text-center space-y-3 shadow-xs group min-w-0 max-w-full w-full overflow-hidden block"
             >
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 mx-auto flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 mx-auto flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
                 <Mail className="w-6 h-6" />
               </div>
-              <div>
+              <div className="min-w-0 w-full">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Direct Email</p>
-                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">{company.email}</p>
+                <p className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white mt-1 break-all sm:break-words [overflow-wrap:anywhere] leading-snug px-1">
+                  {company.email}
+                </p>
               </div>
             </a>
           )}
         </div>
       </section>
+    );
+  };
+
+  // -------------------------------------------------------------
+  // ABOUT SECTION & FULL PAGE (Specialized for School & Enterprise)
+  // -------------------------------------------------------------
+  const isSchool = company.id === 'comp_gara_guri' || company.category === 'Education' || company.name.toLowerCase().includes('school');
+
+  const renderAboutSection = () => {
+    return (
+      <section id="about" className="py-16 sm:py-24 px-4 sm:px-6 max-w-6xl mx-auto space-y-12">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+          <div className="lg:col-span-6 space-y-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 text-xs font-bold border border-amber-200/60 dark:border-amber-800/40">
+              {isSchool ? <GraduationCap className="w-3.5 h-3.5" /> : <Building2 className="w-3.5 h-3.5" />}
+              <span>{isSchool ? 'Seensa & Ergama • About Our School' : 'Our Story & Background'}</span>
+            </div>
+
+            <h2
+              className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight text-slate-900 dark:text-white"
+              style={{ fontFamily: `"${design.headingFont || 'Outfit'}", sans-serif` }}
+            >
+              {isSchool
+                ? 'Barnoota Qulqulluu fi Dhaloota Boruuf Qophaa’e'
+                : `Pioneering Excellence at ${company.name}`}
+            </h2>
+
+            {/* School Motto Quote */}
+            {isSchool && (
+              <blockquote className="p-4 rounded-2xl bg-amber-50/60 dark:bg-slate-800/80 border-l-4 border-amber-500 text-xs sm:text-sm text-slate-700 dark:text-slate-300 italic leading-relaxed">
+                “Barnootnni qulqulina qabu hundee Guddinaa, Cehumsa dinagde fi hawaasummaa yemmuu ta’u, afaan Barnootaa dhimmoota milkaa’ina barattootaa murteessan keessaa isa ijoodha. Kana jechuun afaan dhalootaa barnootaaf fayyadamuun hirmaannaa fi bu’aa qabeessummaa barnootaa waliigalaaf murteessaa dha.”
+              </blockquote>
+            )}
+
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+              {company.fullDescription || company.shortDescription}
+            </p>
+
+            <div className="grid grid-cols-2 gap-4 pt-2">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-1">
+                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs">
+                  <MapPin className="w-4 h-4 shrink-0" />
+                  <span>Bakka / Location</span>
+                </div>
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  {company.address || 'Lammii Kuraa District 2, Finfinnee'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-1">
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                  <BookOpen className="w-4 h-4 shrink-0" />
+                  <span>Sadarkaa / Level</span>
+                </div>
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  {isSchool ? 'Kutaa 9ffaa – 12ffaa (Grades 9-12)' : 'Verified Enterprise'}
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 flex flex-wrap gap-3">
+              <button
+                onClick={() => handlePageClick('about')}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 transition-transform active:scale-95 shadow-xs"
+              >
+                <span>{isSchool ? 'Dubbisi Bal’inaan • Read Full History' : 'Read More About Us'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => handlePageClick('announcements')}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <Megaphone className="w-3.5 h-3.5 text-amber-500" />
+                <span>Beeksisa / Announcements</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="lg:col-span-6">
+            <div className="relative rounded-3xl overflow-hidden shadow-xl border border-slate-200 dark:border-slate-800 bg-slate-900">
+              <img
+                src={company.coverImage || 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&w=1200&q=80'}
+                alt={company.name}
+                className="w-full h-80 sm:h-96 object-cover hover:scale-105 transition-transform duration-500"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex flex-col justify-end p-6">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={company.logo}
+                    alt={company.name}
+                    className="w-12 h-12 rounded-xl bg-white p-1 shadow-md object-contain"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div>
+                    <h4 className="text-white font-extrabold text-sm sm:text-base">{company.name}</h4>
+                    <p className="text-amber-400 text-xs font-semibold">Bulchiinsa Magaalaa Finfinnee • Lammii Kuraa</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
+  const renderAboutPage = () => {
+    return (
+      <div className="space-y-16 py-12">
+        {/* Hero Banner */}
+        <section className="px-4 sm:px-6 max-w-6xl mx-auto">
+          <div className="relative rounded-3xl overflow-hidden bg-slate-900 text-white p-8 sm:p-14 shadow-xl border border-slate-800">
+            {company.coverImage && (
+              <div className="absolute inset-0 z-0">
+                <img
+                  src={company.coverImage}
+                  alt={company.name}
+                  className="w-full h-full object-cover opacity-20 blur-xs scale-105"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900/90 to-transparent" />
+              </div>
+            )}
+            <div className="relative z-10 max-w-2xl space-y-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-400/30">
+                <GraduationCap className="w-3.5 h-3.5" />
+                <span>Odeeffannoo Guutuu Manna Barumsaa • School Dossier</span>
+              </div>
+              <h1
+                className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight"
+                style={{ fontFamily: `"${design.headingFont || 'Outfit'}", sans-serif` }}
+              >
+                {company.name}
+              </h1>
+              <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+                {company.shortDescription || 'Manna Barumsaa Sadarkaa 2ffaa Gaara Gurii — Bulchiinsa Magaalaa Finfinnee, Kutaa Magaalaa Lammii Kuraa.'}
+              </p>
+              <div className="flex flex-wrap gap-4 pt-2 text-xs text-slate-300">
+                <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl backdrop-blur-sm">
+                  <MapPin className="w-4 h-4 text-amber-400" />
+                  <span>{company.address}</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl backdrop-blur-sm">
+                  <BookOpen className="w-4 h-4 text-emerald-400" />
+                  <span>Grades 9 – 12 & Arabic Curriculum</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 1. SEENSA & HISTORICAL BACKGROUND */}
+        <section className="px-4 sm:px-6 max-w-6xl mx-auto space-y-6">
+          <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
+            <span className="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              Seensa Mana Barumsaa
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-1">
+              Background & Historical Foundation
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div className="lg:col-span-7 space-y-4 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+              <p className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 text-slate-800 dark:text-slate-200 font-medium">
+                <strong>Seensa / Back ground:</strong> Barnootnni qulqulina qabu hundee Guddinaa, Cehumsa dinagde fi hawaasummaa yemmuu ta’u, afaan Barnootaa dhimmoota milkaa’ina barattootaa murteessan keessaa isa ijoodha. Kana jechuun afaan dhalootaa barnootaaf fayyadamuun hirmaannaa fi bu’aa qabeessummaa barnootaa waliigalaaf murteessaa dha.
+              </p>
+
+              <p>
+                Manni Barumsaa Sadarkaa 2ffaa Gaara Gurii duraan gargaarsa dhaabbata tola ooltummaa <strong>Almakktum Foundation</strong> jedhamuun ijaaramee tajaajila barnootaa kennaa ture. Erga bara <strong>2012/2013 A.D.</strong> tti Bulchiinsa Magaalaa Finfinneen qabamee as, barattoonni naannoo sanaa afaan dhalootaa isaanii <strong>Afaan Oromootiin</strong> akka baratan taasifamee sadarkaa 2ffaa (Kutaa 9ffaa – 12ffaa) tti tajaajila qulqullina qabu kennaa jira.
+              </p>
+
+              <p>
+                Dabalataanis, manni barumsaa kun barattootaaf sagantaa addaa kan ta’e <strong>Afaan Arabaa (Luga Arabaa)</strong> akka gosa barnootaa tokkootti kutaa 9ffaa hanga 12ffaatti barsiisuudhaan beekamaadha.
+              </p>
+            </div>
+
+            <div className="lg:col-span-5 space-y-4">
+              <div className="p-6 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+                <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <Award className="w-4 h-4 text-amber-500" />
+                  <span>Key Institutional Pillars</span>
+                </h4>
+                <ul className="space-y-3 text-xs text-slate-600 dark:text-slate-300">
+                  <li className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                    <span><strong>Mother Tongue Instruction:</strong> Curriculum delivered fully in Afaan Oromoo alongside English.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                    <span><strong>Arabic Language (Luga Arabaa):</strong> Taught as accredited subject from Grade 9 to Grade 12.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                    <span><strong>Foundation Heritage:</strong> Built in partnership with the Almakktum Foundation.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                    <span><strong>Public Stewardship:</strong> Under Finfinnee City Administration / Lammii Kuraa Sub-City since 2012/2013 E.C.</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 2. ERGAMA, MUL'ATA & DUDHAALEE (Mission, Vision, Values) */}
+        <section className="px-4 sm:px-6 max-w-6xl mx-auto space-y-8">
+          <div className="text-center max-w-2xl mx-auto space-y-2">
+            <span className="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              Kallattii & Dudhaalee Mana Barumsaa
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+              Mission, Vision & Core Values
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Vision */}
+            <div className="p-6 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 flex items-center justify-center">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">🔭 Mul’ata (Vision)</h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                Bara 2022 tti barattoota qulqullina barnootaa fi naamusa olaanaa qaban, dandeettii saayinsii fi teeknooloojiitiin badhaadhaa ta’an, biyyaaf gumaachan horachuu.
+              </p>
+            </div>
+
+            {/* Mission */}
+            <div className="p-6 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center">
+                <Award className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">🎯 Ergama (Mission)</h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                Barsiisota gahumsa qaban, teeknooloojii ammayyaa fi hirmaannaa hawaasaa bu’uura godhachuun barnoota sadarkaa 2ffaa qulqullina qabu barattoota maraaf wal-qixxummaan dhiyeessuu.
+              </p>
+            </div>
+
+            {/* Values */}
+            <div className="p-6 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 flex items-center justify-center">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">⚖️ Dudhaalee Ijoo (Values)</h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                Barnoota Qulqulluu (Quality Education), Amanamtummaa (Integrity), Naamusa (Discipline), Hirmaachisummaa (Inclusivity), fi Uumtummaa (Innovation).
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* 3. ACADEMIC DEPARTMENTS & ARABIC LANGUAGE STREAM */}
+        <section className="px-4 sm:px-6 max-w-6xl mx-auto space-y-6">
+          <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
+            <span className="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              Kutaalee Barnootaa
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-1">
+              Academic Streams & Curriculum Specializations
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white">Natural Sciences</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Physics, Chemistry, Biology, Mathematics with dedicated laboratory experiments.
+              </p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center">
+                <Globe className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white">Social Sciences</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Geography, History, Economics, and Civics education fostering civic responsibility.
+              </p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center">
+                <FileText className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white">Languages & Literature</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Afaan Oromoo (Primary Instruction), English, Amharic, and comprehensive communication skills.
+              </p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700/80 bg-amber-50/40 dark:bg-amber-950/20 space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-sm text-amber-900 dark:text-amber-200">Luga Arabaa (Arabic)</h4>
+              <p className="text-xs text-amber-800 dark:text-amber-300/90">
+                Specialized language curriculum offered across Grades 9–12 for linguistic fluency.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* 4. CAMPUS FACILITIES & RESOURCES */}
+        <section className="px-4 sm:px-6 max-w-6xl mx-auto space-y-6">
+          <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
+            <span className="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              Mijaawina Mooraa
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-1">
+              Campus Infrastructure & Learning Facilities
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-6 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3">
+              <Library className="w-8 h-8 text-amber-500" />
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white">Mana Dubbisaa / Library</h4>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                Quiet study environment stocked with national textbooks, academic references, and digital learning devices.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3">
+              <Layers className="w-8 h-8 text-emerald-500" />
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white">Laboraatorii Saayinsii</h4>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                Equipped physics, chemistry, and biology labs allowing students to put theoretical concepts into hands-on practice.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3">
+              <Users className="w-8 h-8 text-blue-500" />
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white">Dirree Ispoortii fi Galma</h4>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                Outdoor sporting grounds for physical education, athletic tournaments, and student club activities.
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  };
+
+  // -------------------------------------------------------------
+  // ANNOUNCEMENTS SECTION & FULL BULLETIN BOARD
+  // -------------------------------------------------------------
+  const renderAnnouncementsSection = () => {
+    if (announcements.length === 0) return null;
+
+    const featuredAnn = announcements.find((a) => a.featured) || announcements[0];
+    const otherAnns = announcements.filter((a) => a.id !== featuredAnn?.id).slice(0, 3);
+
+    return (
+      <section id="announcements" className="py-16 sm:py-20 px-4 sm:px-6 max-w-6xl mx-auto space-y-8">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-xs">
+              <Megaphone className="w-3.5 h-3.5" />
+              <span>Beeksisa & Oduu Haaraa</span>
+            </div>
+            <h3
+              className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1"
+              style={{ fontFamily: `"${design.headingFont || 'Outfit'}", sans-serif` }}
+            >
+              Latest Notices & Announcements
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">Official updates from {company.name} administration.</p>
+          </div>
+
+          <button
+            onClick={() => handlePageClick('announcements')}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors w-fit"
+          >
+            <span>View All Notices ({announcements.length})</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Featured Hero Notice */}
+        {featuredAnn && (
+          <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-950 text-white border border-slate-800 shadow-lg relative overflow-hidden">
+            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+              <div className="lg:col-span-8 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-md bg-amber-500 text-slate-950 font-extrabold text-[10px] uppercase tracking-wider">
+                    ★ Featured Notice
+                  </span>
+                  <span className="text-xs text-slate-400 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {new Date(featuredAnn.publishDate || featuredAnn.createdAt).toLocaleDateString(undefined, {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </span>
+                </div>
+
+                <h4 className="text-lg sm:text-2xl font-extrabold tracking-tight">{featuredAnn.title}</h4>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed line-clamp-3">
+                  {featuredAnn.content}
+                </p>
+
+                <div className="pt-2 flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setSelectedAnnouncement(featuredAnn);
+                      setAnnouncementModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition-colors"
+                  >
+                    <span>Read Full Bulletin</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                  {featuredAnn.ctaUrl && (
+                    <a
+                      href={featuredAnn.ctaUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors"
+                    >
+                      <span>{featuredAnn.ctaText || 'Open Link'}</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {featuredAnn.image && (
+                <div className="lg:col-span-4">
+                  <img
+                    src={featuredAnn.image}
+                    alt={featuredAnn.title}
+                    className="w-full h-44 rounded-2xl object-cover border border-slate-700 shadow-md"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Secondary Grid Notices */}
+        {otherAnns.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {otherAnns.map((ann) => (
+              <div
+                key={ann.id}
+                onClick={() => {
+                  setSelectedAnnouncement(ann);
+                  setAnnouncementModalOpen(true);
+                }}
+                className="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 dark:hover:border-amber-500 transition-all cursor-pointer shadow-xs group flex flex-col justify-between"
+              >
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-amber-500" />
+                      {new Date(ann.publishDate || ann.createdAt).toLocaleDateString()}
+                    </span>
+                    <span className="font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md text-[10px]">
+                      Official
+                    </span>
+                  </div>
+
+                  <h5 className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors line-clamp-2">
+                    {ann.title}
+                  </h5>
+
+                  <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-3 leading-relaxed">
+                    {ann.content}
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-700/50 mt-4 flex items-center justify-between text-xs font-bold text-amber-600 dark:text-amber-400">
+                  <span>Dubbisi / Read Notice</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    );
+  };
+
+  const renderAnnouncementsPage = () => {
+    // Filter announcements by category and search query
+    const filteredAnnouncements = announcements.filter((ann) => {
+      const matchSearch =
+        announcementSearchQuery === '' ||
+        ann.title.toLowerCase().includes(announcementSearchQuery.toLowerCase()) ||
+        ann.content.toLowerCase().includes(announcementSearchQuery.toLowerCase());
+
+      if (!matchSearch) return false;
+
+      if (selectedAnnCategory === 'all') return true;
+      if (selectedAnnCategory === 'academic') {
+        return (
+          ann.title.toLowerCase().includes('barumsa') ||
+          ann.title.toLowerCase().includes('galmee') ||
+          ann.title.toLowerCase().includes('academic') ||
+          ann.title.toLowerCase().includes('qormaata')
+        );
+      }
+      if (selectedAnnCategory === 'arabic') {
+        return (
+          ann.title.toLowerCase().includes('araba') ||
+          ann.title.toLowerCase().includes('arabic') ||
+          ann.content.toLowerCase().includes('araba')
+        );
+      }
+      if (selectedAnnCategory === 'pta') {
+        return (
+          ann.title.toLowerCase().includes('maatii') ||
+          ann.title.toLowerCase().includes('pta') ||
+          ann.title.toLowerCase().includes('walga\'ii')
+        );
+      }
+      return true;
+    });
+
+    return (
+      <div className="space-y-12 py-12 px-4 sm:px-6 max-w-6xl mx-auto">
+        {/* Page Header */}
+        <div className="space-y-3 max-w-2xl">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-xs">
+            <Megaphone className="w-3.5 h-3.5" />
+            <span>Gabatee Beeksisaa • Official Announcement Bulletin</span>
+          </div>
+          <h1
+            className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white"
+            style={{ fontFamily: `"${design.headingFont || 'Outfit'}", sans-serif` }}
+          >
+            School Bulletins & Important Updates
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+            Keep track of official school registrations, academic calendar schedules, Arabic program milestones, and PTA community meetings.
+          </p>
+        </div>
+
+        {/* Search & Filter Toolbar */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-stretch sm:items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search announcements by keyword..."
+              value={announcementSearchQuery}
+              onChange={(e) => setAnnouncementSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2 text-xs font-bold">
+            <button
+              onClick={() => setSelectedAnnCategory('all')}
+              className={`px-3 py-1.5 rounded-xl transition-colors ${
+                selectedAnnCategory === 'all'
+                  ? 'bg-amber-500 text-slate-950'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+              }`}
+            >
+              All Notices ({announcements.length})
+            </button>
+            <button
+              onClick={() => setSelectedAnnCategory('academic')}
+              className={`px-3 py-1.5 rounded-xl transition-colors ${
+                selectedAnnCategory === 'academic'
+                  ? 'bg-amber-500 text-slate-950'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+              }`}
+            >
+              🎓 Academic & Registration
+            </button>
+            <button
+              onClick={() => setSelectedAnnCategory('arabic')}
+              className={`px-3 py-1.5 rounded-xl transition-colors ${
+                selectedAnnCategory === 'arabic'
+                  ? 'bg-amber-500 text-slate-950'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+              }`}
+            >
+              📖 Arabic Curriculum
+            </button>
+            <button
+              onClick={() => setSelectedAnnCategory('pta')}
+              className={`px-3 py-1.5 rounded-xl transition-colors ${
+                selectedAnnCategory === 'pta'
+                  ? 'bg-amber-500 text-slate-950'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+              }`}
+            >
+              👨‍👩‍👧‍👦 PTA & Community
+            </button>
+          </div>
+        </div>
+
+        {/* Notices Cards Grid */}
+        {filteredAnnouncements.length === 0 ? (
+          <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 space-y-3">
+            <Megaphone className="w-12 h-12 text-slate-300 mx-auto" />
+            <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200">No Announcements Found</h4>
+            <p className="text-xs text-slate-500">Try adjusting your search query or filter category.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {filteredAnnouncements.map((ann) => (
+              <div
+                key={ann.id}
+                onClick={() => {
+                  setSelectedAnnouncement(ann);
+                  setAnnouncementModalOpen(true);
+                }}
+                className="p-6 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 dark:hover:border-amber-500 transition-all cursor-pointer shadow-xs group flex flex-col justify-between space-y-4"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 font-extrabold text-[10px] uppercase tracking-wider">
+                        {ann.featured ? '★ Featured Bulletin' : 'Official Notice'}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-amber-500" />
+                      {new Date(ann.publishDate || ann.createdAt).toLocaleDateString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </span>
+                  </div>
+
+                  {ann.image && (
+                    <img
+                      src={ann.image}
+                      alt={ann.title}
+                      className="w-full h-48 rounded-2xl object-cover border border-slate-100 dark:border-slate-700"
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
+
+                  <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors leading-snug">
+                    {ann.title}
+                  </h3>
+
+                  <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-4 leading-relaxed">
+                    {ann.content}
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400 group-hover:underline flex items-center gap-1">
+                    <span>Dubbisi / View Details</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                  {ann.ctaUrl && (
+                    <a
+                      href={ann.ctaUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center gap-1"
+                    >
+                      <span>{ann.ctaText || 'Link'}</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -1129,6 +1821,27 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 Home
               </button>
 
+              <button
+                onClick={() => handlePageClick('about')}
+                className={`px-3 py-2 rounded-lg transition-colors ${
+                  activePageSlug === 'about' ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                {isSchool ? '🏫 School Info' : 'About Us'}
+              </button>
+
+              {announcements.length > 0 && (
+                <button
+                  onClick={() => handlePageClick('announcements')}
+                  className={`px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
+                    activePageSlug === 'announcements' ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Megaphone className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Announcements ({announcements.length})</span>
+                </button>
+              )}
+
               {products.length > 0 && (
                 <button
                   onClick={() => handlePageClick('menu')}
@@ -1136,7 +1849,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                     activePageSlug === 'menu' || activePageSlug === 'store' || activePageSlug === 'products' ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  Digital Menu / Store
+                  {isSchool ? 'Programs & Resources' : 'Digital Menu / Store'}
                 </button>
               )}
 
@@ -1151,14 +1864,14 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 </button>
               )}
 
-              {(offers.length > 0 || announcements.length > 0) && (
+              {offers.length > 0 && (
                 <button
                   onClick={() => handlePageClick('offers')}
                   className={`px-3 py-2 rounded-lg transition-colors ${
                     activePageSlug === 'offers' ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  Offers & News
+                  Special Offers
                 </button>
               )}
 
@@ -1222,6 +1935,28 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 <ChevronRight className="w-4 h-4 opacity-50" />
               </button>
 
+              <button
+                onClick={() => { handlePageClick('about'); setMobileMenuOpen(false); }}
+                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-between ${
+                  activePageSlug === 'about' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'
+                }`}
+              >
+                <span>🏫 {isSchool ? 'School Info & History' : 'About Us'}</span>
+                <ChevronRight className="w-4 h-4 opacity-50" />
+              </button>
+
+              {announcements.length > 0 && (
+                <button
+                  onClick={() => { handlePageClick('announcements'); setMobileMenuOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-between ${
+                    activePageSlug === 'announcements' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  <span>📢 Announcements ({announcements.length})</span>
+                  <ChevronRight className="w-4 h-4 opacity-50" />
+                </button>
+              )}
+
               {products.length > 0 && (
                 <button
                   onClick={() => { handlePageClick('menu'); setMobileMenuOpen(false); }}
@@ -1229,7 +1964,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                     activePageSlug === 'menu' || activePageSlug === 'store' || activePageSlug === 'products' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'
                   }`}
                 >
-                  <span>🍽️ Digital Menu & Store ({products.length})</span>
+                  <span>🍽️ {isSchool ? 'Programs & Resources' : 'Digital Menu & Store'} ({products.length})</span>
                   <ChevronRight className="w-4 h-4 opacity-50" />
                 </button>
               )}
@@ -1285,7 +2020,17 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
       )}
 
       {/* RENDER BODY ACCORDING TO ACTIVE PAGE */}
-      {isPageMenu || isPageStore ? (
+      {isPageAbout ? (
+        <div className="space-y-12">
+          {renderAboutPage()}
+          {renderSectionContainer('contact', renderContactSection())}
+        </div>
+      ) : activePageSlug === 'announcements' ? (
+        <div className="space-y-12">
+          {renderAnnouncementsPage()}
+          {renderSectionContainer('contact', renderContactSection())}
+        </div>
+      ) : isPageMenu || isPageStore ? (
         <div className="space-y-12">
           {renderSectionContainer('store', renderProductsSection())}
           {renderSectionContainer('contact', renderContactSection())}
@@ -1298,7 +2043,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
       ) : isPageOffers ? (
         <div className="space-y-12">
           {renderSectionContainer('promos', renderPromosBanner())}
-          {renderSectionContainer('store', renderProductsSection())}
+          {renderAnnouncementsPage()}
           {renderSectionContainer('contact', renderContactSection())}
         </div>
       ) : isPageContact ? (
@@ -1310,10 +2055,12 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
         /* Default Full Home Page */
         <main className="space-y-12">
           {renderSectionContainer('hero', renderHeroSection())}
+          {renderSectionContainer('about_preview', renderAboutSection())}
+          {announcements.length > 0 && renderSectionContainer('announcements_preview', renderAnnouncementsSection())}
           {renderSectionContainer('promos', renderPromosBanner())}
-          {renderSectionContainer('store', renderProductsSection())}
+          {products.length > 0 && renderSectionContainer('store', renderProductsSection())}
           {renderSectionContainer('hours', renderScheduleLocationSection())}
-          {renderSectionContainer('reviews', renderReviewsSection())}
+          {reviews.length > 0 && renderSectionContainer('reviews', renderReviewsSection())}
           {renderSectionContainer('faq', renderFaqSection())}
           {renderSectionContainer('custom_html', renderCustomHtmlSection())}
           {renderSectionContainer('contact', renderContactSection())}
@@ -1489,6 +2236,73 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
           setSelectedDetailItem(null);
         }}
       />
+
+      {/* Full Announcement Detail Modal */}
+      <Modal
+        isOpen={announcementModalOpen}
+        onClose={() => {
+          setAnnouncementModalOpen(false);
+          setSelectedAnnouncement(null);
+        }}
+        title={selectedAnnouncement?.title || 'Official Announcement'}
+        description={
+          selectedAnnouncement
+            ? `Published on ${new Date(selectedAnnouncement.publishDate || selectedAnnouncement.createdAt).toLocaleDateString(undefined, {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })} by ${company.name}`
+            : undefined
+        }
+      >
+        {selectedAnnouncement && (
+          <div className="space-y-4">
+            {selectedAnnouncement.image && (
+              <img
+                src={selectedAnnouncement.image}
+                alt={selectedAnnouncement.title}
+                className="w-full h-56 rounded-2xl object-cover border border-slate-200 dark:border-slate-700"
+                referrerPolicy="no-referrer"
+              />
+            )}
+
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+              {selectedAnnouncement.content}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                <span>Verified bulletin issued by school administration</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {selectedAnnouncement.ctaUrl && (
+                  <a
+                    href={selectedAnnouncement.ctaUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-xs"
+                  >
+                    <span>{selectedAnnouncement.ctaText || 'Open Action'}</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAnnouncementModalOpen(false);
+                    setSelectedAnnouncement(null);
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

@@ -34,7 +34,7 @@ import {
   ThemeDefinition,
   FeatureDefinition,
 } from '../types';
-import { INITIAL_CATEGORIES, INITIAL_SETTINGS } from '../data/seed';
+import { INITIAL_CATEGORIES, INITIAL_SETTINGS, INITIAL_COMPANIES, INITIAL_WEBSITES, INITIAL_ANNOUNCEMENTS } from '../data/seed';
 import { THEME_REGISTRY } from '../data/themes';
 import { FEATURE_REGISTRY } from '../data/features';
 import { withTimeout, logAudit, logError } from './firestoreUtils';
@@ -201,12 +201,16 @@ export const api = {
     try {
       const snap = await withTimeout(getDocs(collection(firestoreDb, 'companies')), 10000);
       if (!snap.empty) {
-        return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Company));
+        const firestoreList = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Company));
+        // Check for any seed companies not yet in Firestore (e.g. comp_gara_guri) and include them
+        const existingIds = new Set(firestoreList.map((c) => c.id));
+        const missingSeed = INITIAL_COMPANIES.filter((sc) => !existingIds.has(sc.id));
+        return [...firestoreList, ...missingSeed];
       }
     } catch (err) {
       logError('getCompanies', err);
     }
-    return [];
+    return INITIAL_COMPANIES;
   },
 
   getCompany: async (id: string): Promise<Company> => {
@@ -227,6 +231,17 @@ export const api = {
     } catch (err) {
       logError('getCompany', err, { id });
     }
+
+    // 3. Fallback to INITIAL_COMPANIES
+    const fallbackCompany = INITIAL_COMPANIES.find(
+      (c) => c.id === id || c.slug === id || c.slug === id.toLowerCase() || c.name.toLowerCase() === id.toLowerCase()
+    );
+    if (fallbackCompany) {
+      // Asynchronously sync to Firestore
+      setDoc(doc(firestoreDb, 'companies', fallbackCompany.id), fallbackCompany).catch(() => {});
+      return fallbackCompany;
+    }
+
     throw new ApiError(404, `Company with identifier '${id}' not found`);
   },
 
@@ -658,9 +673,15 @@ export const api = {
       }
     } catch (err: any) {
       logError('getWebsite', err, { id });
-      const code = err.code || 'UNKNOWN';
-      throw new ApiError(500, `[Firestore Error on websites/${id} (${code})]: ${err.message || err}`);
     }
+
+    // Fallback to INITIAL_WEBSITES
+    const fallbackWebsite = INITIAL_WEBSITES.find((w) => w.id === id || w.companyId === id);
+    if (fallbackWebsite) {
+      setDoc(doc(firestoreDb, 'websites', fallbackWebsite.id), fallbackWebsite).catch(() => {});
+      return fallbackWebsite;
+    }
+
     throw new ApiError(404, `Website configuration '${id}' not found in Firestore`);
   },
 
@@ -1760,10 +1781,23 @@ export const api = {
         ? query(collection(firestoreDb, 'announcements'), where('companyId', '==', _companyId))
         : collection(firestoreDb, 'announcements');
       const snap = await withTimeout(getDocs(q), 8000);
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Announcement));
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Announcement));
+      if (list.length > 0) return list;
     } catch {
-      return [];
+      // fallback
     }
+
+    // Fallback to INITIAL_ANNOUNCEMENTS
+    if (_companyId) {
+      const filtered = INITIAL_ANNOUNCEMENTS.filter((a) => a.companyId === _companyId);
+      if (filtered.length > 0) {
+        filtered.forEach((ann) => {
+          setDoc(doc(firestoreDb, 'announcements', ann.id), ann).catch(() => {});
+        });
+        return filtered;
+      }
+    }
+    return INITIAL_ANNOUNCEMENTS;
   },
 
   createAnnouncement: async (data: Partial<Announcement>): Promise<Announcement> => {
@@ -1789,6 +1823,29 @@ export const api = {
       logError('createAnnouncement', err);
     }
     return newAnn;
+  },
+
+  updateAnnouncement: async (id: string, data: Partial<Announcement>): Promise<Announcement> => {
+    const annRef = doc(firestoreDb, 'announcements', id);
+    const updatePayload = { ...data, updatedAt: new Date().toISOString() };
+    try {
+      await withTimeout(setDoc(annRef, updatePayload, { merge: true }), 8000);
+      const snap = await getDoc(annRef);
+      return { id: snap.id, ...snap.data() } as Announcement;
+    } catch (err) {
+      logError('updateAnnouncement', err, { id });
+      throw new ApiError(500, 'Failed to update announcement');
+    }
+  },
+
+  deleteAnnouncement: async (id: string): Promise<{ success: boolean }> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'announcements', id)), 8000);
+      return { success: true };
+    } catch (err) {
+      logError('deleteAnnouncement', err, { id });
+      throw new ApiError(500, 'Failed to delete announcement');
+    }
   },
 
   getHealth: async () => {

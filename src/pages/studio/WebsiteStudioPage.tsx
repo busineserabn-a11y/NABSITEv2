@@ -859,9 +859,9 @@ export const WebsiteStudioPage: React.FC = () => {
           <div
             className={`transition-all duration-300 bg-white dark:bg-slate-950 rounded-2xl shadow-2xl overflow-hidden border border-slate-800 ${
               viewport === 'mobile'
-                ? 'w-[390px] min-h-[800px]'
+                ? 'w-full max-w-[390px] min-h-[800px]'
                 : viewport === 'tablet'
-                ? 'w-[768px] min-h-[900px]'
+                ? 'w-full max-w-[768px] min-h-[900px]'
                 : 'w-full max-w-6xl min-h-[900px]'
             }`}
           >

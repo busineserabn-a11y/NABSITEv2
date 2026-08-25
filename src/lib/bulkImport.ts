@@ -14,6 +14,15 @@ import { db as firestoreDb } from './firebase';
 import { api, generateSlug } from './api';
 import { withTimeout, logAudit, logError } from './firestoreUtils';
 import { Company, Website, Product, ProductCategory, QrConfig, Offer, Announcement } from '../types';
+import {
+  generateControlledExcelTemplate,
+  WORKBOOK_COLUMNS,
+  NABSITE_CATEGORIES,
+  NABSITE_STATUSES,
+  NABSITE_COUNTRIES,
+  NABSITE_CITIES,
+  DEMO_SAMPLE_ROWS,
+} from './excelTemplateGenerator';
 
 // ==========================================
 // 1. DATA MODELS & TYPES FOR BULK IMPORT
@@ -39,6 +48,27 @@ export interface RawCompanyRow {
   instagram_url?: string;
   tiktok_url?: string;
   telegram_url?: string;
+  monday_open?: string;
+  monday_close?: string;
+  monday_closed?: string;
+  tuesday_open?: string;
+  tuesday_close?: string;
+  tuesday_closed?: string;
+  wednesday_open?: string;
+  wednesday_close?: string;
+  wednesday_closed?: string;
+  thursday_open?: string;
+  thursday_close?: string;
+  thursday_closed?: string;
+  friday_open?: string;
+  friday_close?: string;
+  friday_closed?: string;
+  saturday_open?: string;
+  saturday_close?: string;
+  saturday_closed?: string;
+  sunday_open?: string;
+  sunday_close?: string;
+  sunday_closed?: string;
   status?: string;
   [key: string]: any;
 }
@@ -53,6 +83,7 @@ export interface ValidatedCompanyRow {
   isExistingSlug: boolean;
   generatedSlug: string;
   matchedCompanyId?: string;
+  openingHoursSummary?: string;
 }
 
 export type DuplicateHandlingMode =
@@ -155,101 +186,17 @@ export interface RawQrRow {
   [key: string]: any;
 }
 
-// ==========================================
-// 2. TEMPLATE DEFINITIONS & FILE GENERATION
-// ==========================================
+// Re-export columns for UI Guide Modal
+export const COMPANY_IMPORT_COLUMNS = WORKBOOK_COLUMNS.map((col) => ({
+  key: col.key,
+  label: col.header,
+  required: col.constraint === 'REQUIRED',
+  example: col.example,
+  desc: col.desc,
+  constraint: col.constraint,
+}));
 
-export const COMPANY_IMPORT_COLUMNS = [
-  { key: 'company_key', label: 'Company Key', required: true, example: 'C001', desc: 'Permanent unique identifier (e.g. C001, C002)' },
-  { key: 'company_name', label: 'Company Name', required: true, example: 'Addis Gourmet Restaurant', desc: 'Official commercial business name' },
-  { key: 'short_name', label: 'Short Name', required: false, example: 'Addis Gourmet', desc: 'Abbreviated name for compact buttons & badges' },
-  { key: 'category', label: 'Category', required: true, example: 'Restaurant', desc: 'Business category (Restaurant, Cafe, Hotel, Bar, Retail, etc.)' },
-  { key: 'description', label: 'Description', required: false, example: 'Fine Ethiopian and international dining experience in Bole.', desc: 'High-level business overview for website hero & SEO' },
-  { key: 'logo_url', label: 'Logo Image URL', required: false, example: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=400', desc: 'Direct public HTTPS image link for company logo' },
-  { key: 'cover_image_url', label: 'Cover Image URL', required: false, example: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200', desc: 'Direct public HTTPS link for website cover / hero backdrop' },
-  { key: 'phone', label: 'Phone', required: false, example: '+251 911 234 567', desc: 'Primary customer telephone or hotline' },
-  { key: 'whatsapp', label: 'WhatsApp', required: false, example: '+251 911 234 567', desc: 'WhatsApp number for click-to-chat CTA' },
-  { key: 'email', label: 'Email', required: false, example: 'info@addisgourmet.et', desc: 'Official contact email' },
-  { key: 'address', label: 'Address', required: false, example: 'Bole Road, Next to Mega Building', desc: 'Physical street address or floor location' },
-  { key: 'city', label: 'City', required: false, example: 'Addis Ababa', desc: 'City of operation' },
-  { key: 'country', label: 'Country', required: false, example: 'Ethiopia', desc: 'Country location' },
-  { key: 'google_maps_url', label: 'Google Maps URL', required: false, example: 'https://maps.google.com/?q=Bole+Addis+Ababa', desc: 'Google Maps location link' },
-  { key: 'website_url', label: 'External Website URL', required: false, example: 'https://addisgourmet.et', desc: 'Existing external website if applicable' },
-  { key: 'facebook_url', label: 'Facebook URL', required: false, example: 'https://facebook.com/addisgourmet', desc: 'Facebook page link' },
-  { key: 'instagram_url', label: 'Instagram URL', required: false, example: 'https://instagram.com/addisgourmet', desc: 'Instagram profile link' },
-  { key: 'tiktok_url', label: 'TikTok URL', required: false, example: 'https://tiktok.com/@addisgourmet', desc: 'TikTok profile link' },
-  { key: 'telegram_url', label: 'Telegram URL', required: false, example: 'https://t.me/addisgourmet', desc: 'Telegram channel or direct bot link' },
-  { key: 'status', label: 'Status', required: false, example: 'active', desc: 'Status: active, draft, suspended, or archived (Default: active)' },
-];
-
-export const SAMPLE_COMPANIES_DATA: RawCompanyRow[] = [
-  {
-    company_key: 'C001',
-    company_name: 'Addis Gourmet Restaurant',
-    short_name: 'Addis Gourmet',
-    category: 'Restaurant',
-    description: 'Premier culinary dining offering authentic Ethiopian heritage dishes and contemporary fusion.',
-    logo_url: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=400&auto=format&fit=crop&q=80',
-    cover_image_url: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&auto=format&fit=crop&q=80',
-    phone: '+251 911 123 456',
-    whatsapp: '+251 911 123 456',
-    email: 'contact@addisgourmet.et',
-    address: 'Bole Medhanealem, Cameroon Street',
-    city: 'Addis Ababa',
-    country: 'Ethiopia',
-    google_maps_url: 'https://maps.google.com/?q=Bole+Medhanealem+Addis+Ababa',
-    website_url: 'https://addisgourmet.et',
-    facebook_url: 'https://facebook.com/addisgourmet',
-    instagram_url: 'https://instagram.com/addisgourmet',
-    tiktok_url: 'https://tiktok.com/@addisgourmet',
-    telegram_url: 'https://t.me/addisgourmet',
-    status: 'active',
-  },
-  {
-    company_key: 'C002',
-    company_name: 'Entoto Artisan Coffee Roasters',
-    short_name: 'Entoto Coffee',
-    category: 'Cafe',
-    description: 'Single-origin specialty coffee beans freshly roasted at 3,000 meters above sea level.',
-    logo_url: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=400&auto=format&fit=crop&q=80',
-    cover_image_url: 'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=1200&auto=format&fit=crop&q=80',
-    phone: '+251 922 456 789',
-    whatsapp: '+251 922 456 789',
-    email: 'beans@entotocoffee.et',
-    address: 'Entoto Park Scenic Pavilion',
-    city: 'Addis Ababa',
-    country: 'Ethiopia',
-    google_maps_url: 'https://maps.google.com/?q=Entoto+Park+Addis+Ababa',
-    website_url: 'https://entotocoffee.et',
-    facebook_url: 'https://facebook.com/entotocoffee',
-    instagram_url: 'https://instagram.com/entotocoffee',
-    tiktok_url: 'https://tiktok.com/@entotocoffee',
-    telegram_url: 'https://t.me/entotocoffee',
-    status: 'active',
-  },
-  {
-    company_key: 'C003',
-    company_name: 'Harmony Wellness & Medical Clinic',
-    short_name: 'Harmony Clinic',
-    category: 'Health & Medical',
-    description: 'Comprehensive health diagnostics, physiotherapy, and preventive family medical care.',
-    logo_url: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=400&auto=format&fit=crop&q=80',
-    cover_image_url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1200&auto=format&fit=crop&q=80',
-    phone: '+251 933 789 012',
-    whatsapp: '+251 933 789 012',
-    email: 'care@harmonyclinic.et',
-    address: 'Kazanchis, Guinea Conakry Street',
-    city: 'Addis Ababa',
-    country: 'Ethiopia',
-    google_maps_url: 'https://maps.google.com/?q=Kazanchis+Addis+Ababa',
-    website_url: 'https://harmonyclinic.et',
-    facebook_url: 'https://facebook.com/harmonyclinic',
-    instagram_url: 'https://instagram.com/harmonyclinic',
-    tiktok_url: '',
-    telegram_url: 'https://t.me/harmonyclinic',
-    status: 'active',
-  },
-];
+export const SAMPLE_COMPANIES_DATA: RawCompanyRow[] = DEMO_SAMPLE_ROWS as RawCompanyRow[];
 
 export const SAMPLE_MENU_DATA: RawMenuRow[] = [
   {
@@ -429,6 +376,22 @@ export const SAMPLE_QR_DATA: RawQrRow[] = [
 // 3. FILE EXPORT & DOWNLOAD UTILITIES
 // ==========================================
 
+/**
+ * Downloads the official controlled multi-sheet Excel template
+ * with dropdown validations, formatting, instructions, and error guide.
+ */
+export async function downloadOfficialExcelTemplate(): Promise<void> {
+  const blob = await generateControlledExcelTemplate();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'NABSITE_Company_Import_Template.xlsx';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export function downloadSpreadsheetFile(
   data: any[],
   filename: string,
@@ -464,10 +427,10 @@ export function downloadFailedRowsCsv(
 }
 
 // ==========================================
-// 4. PARSING & SYNTACTIC VALIDATION
+// 4. PARSING & MULTI-SHEET EXCEL INGESTION
 // ==========================================
 
-export async function parseUploadedFile(file: File): Promise<any[]> {
+export async function parseUploadedFile(file: File): Promise<RawCompanyRow[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -482,26 +445,64 @@ export async function parseUploadedFile(file: File): Promise<any[]> {
         if (file.name.endsWith('.json')) {
           const text = typeof buffer === 'string' ? buffer : new TextDecoder().decode(buffer as ArrayBuffer);
           const parsed = JSON.parse(text);
+          let rawList: any[] = [];
           if (Array.isArray(parsed)) {
-            resolve(parsed);
+            rawList = parsed;
           } else if (parsed && Array.isArray(parsed.companies)) {
-            resolve(parsed.companies);
+            rawList = parsed.companies;
           } else {
-            resolve([parsed]);
+            rawList = [parsed];
           }
+          resolve(rawList);
           return;
         }
 
-        // XLSX, XLS, CSV parsing via SheetJS
+        // Multi-sheet XLSX, XLS, CSV parsing via SheetJS
         const workbook = XLSX.read(buffer, { type: typeof buffer === 'string' ? 'string' : 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        if (!firstSheetName) {
-          throw new Error('Spreadsheet does not contain any readable sheets.');
+        
+        // Priority: Find "COMPANIES" sheet (case-insensitive)
+        let targetSheetName = workbook.SheetNames.find(
+          (name) => name.trim().toUpperCase() === 'COMPANIES'
+        );
+
+        // Fallback: If no "COMPANIES" sheet, check for first non-instruction sheet or sheet 0
+        if (!targetSheetName) {
+          targetSheetName = workbook.SheetNames.find(
+            (name) => !['START_HERE', 'OPTIONS', 'ERROR_GUIDE'].includes(name.trim().toUpperCase())
+          ) || workbook.SheetNames[0];
         }
 
-        const sheet = workbook.Sheets[firstSheetName];
-        const rawJson: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-        resolve(rawJson);
+        if (!targetSheetName) {
+          throw new Error('Spreadsheet does not contain any readable data sheets.');
+        }
+
+        const sheet = workbook.Sheets[targetSheetName];
+        let rawRows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+        // Filter out constraint indicator rows (e.g. "● REQUIRED", "○ OPTIONAL") or empty rows
+        rawRows = rawRows.filter((r) => {
+          const keyStr = (r.company_key || '').toString().trim();
+          const nameStr = (r.company_name || '').toString().trim();
+
+          // Reject header constraint indicator row
+          if (
+            keyStr.includes('REQUIRED') ||
+            keyStr.includes('OPTIONAL') ||
+            keyStr.includes('SYSTEM') ||
+            keyStr === '● REQUIRED'
+          ) {
+            return false;
+          }
+
+          // Reject empty row
+          if (!keyStr && !nameStr && !r.category) {
+            return false;
+          }
+
+          return true;
+        });
+
+        resolve(rawRows);
       } catch (err: any) {
         reject(new Error(`Failed to parse spreadsheet: ${err.message || String(err)}`));
       }
@@ -539,6 +540,39 @@ function isValidEmail(email: string): boolean {
   return re.test(email.trim());
 }
 
+/**
+ * Parses and summarizes opening hour schedule from row columns
+ */
+function buildOpeningHoursSummary(r: RawCompanyRow): string {
+  const days = [
+    { name: 'Mon', open: r.monday_open, close: r.monday_close, closed: r.monday_closed },
+    { name: 'Tue', open: r.tuesday_open, close: r.tuesday_close, closed: r.tuesday_closed },
+    { name: 'Wed', open: r.wednesday_open, close: r.wednesday_close, closed: r.wednesday_closed },
+    { name: 'Thu', open: r.thursday_open, close: r.thursday_close, closed: r.thursday_closed },
+    { name: 'Fri', open: r.friday_open, close: r.friday_close, closed: r.friday_closed },
+    { name: 'Sat', open: r.saturday_open, close: r.saturday_close, closed: r.saturday_closed },
+    { name: 'Sun', open: r.sunday_open, close: r.sunday_close, closed: r.sunday_closed },
+  ];
+
+  const hasAnyHours = days.some((d) => d.open || d.close || d.closed);
+  if (!hasAnyHours) {
+    return 'Mon - Sun: 8:00 AM - 10:00 PM';
+  }
+
+  const parts = days.map((d) => {
+    const isClosed = d.closed === 'Yes' || d.closed === 'true' || (d.closed as unknown) === true;
+    if (isClosed) {
+      return `${d.name}: Closed`;
+    }
+    if (d.open && d.close) {
+      return `${d.name}: ${d.open} - ${d.close}`;
+    }
+    return `${d.name}: 08:00 - 22:00`;
+  });
+
+  return parts.join(', ');
+}
+
 // ==========================================
 // 5. COMPREHENSIVE COMPANY VALIDATION ENGINE
 // ==========================================
@@ -555,7 +589,6 @@ export async function validateCompanyImportData(
 }> {
   const validatedRows: ValidatedCompanyRow[] = [];
   const keyOccurrences = new Map<string, number>();
-  const slugOccurrences = new Map<string, number>();
 
   const existingKeysSet = new Set(
     existingCompanies.map((c) => (c.metadata?.companyKey || c.id || '').toLowerCase().trim())
@@ -563,6 +596,10 @@ export async function validateCompanyImportData(
   const existingSlugsSet = new Set(
     existingCompanies.map((c) => (c.slug || '').toLowerCase().trim())
   );
+
+  const categoriesLowerSet = new Set(NABSITE_CATEGORIES.map((c) => c.toLowerCase()));
+  const countriesLowerSet = new Set(NABSITE_COUNTRIES.map((c) => c.toLowerCase()));
+  const citiesLowerSet = new Set(NABSITE_CITIES.map((c) => c.toLowerCase()));
 
   // 1. Pass 1: Count key repetitions in current file
   rows.forEach((r) => {
@@ -579,13 +616,16 @@ export async function validateCompanyImportData(
 
   // 2. Pass 2: Row-by-row deep inspection
   rows.forEach((rawRow, idx) => {
-    const rowNum = idx + 2; // Excel row indexing (1-based + 1 for header)
+    const rowNum = idx + 3; // Excel row indexing (1-based + 2 for header & constraint rows)
     const errors: string[] = [];
     const warnings: string[] = [];
 
     const key = (rawRow.company_key || '').toString().trim();
     const name = (rawRow.company_name || '').toString().trim();
-    const category = (rawRow.category || '').toString().trim();
+    const shortName = (rawRow.short_name || '').toString().trim();
+    const rawCategory = (rawRow.category || '').toString().trim();
+    const rawCity = (rawRow.city || '').toString().trim();
+    const rawCountry = (rawRow.country || '').toString().trim();
     const email = (rawRow.email || '').toString().trim();
     const logo = (rawRow.logo_url || '').toString().trim();
     const cover = (rawRow.cover_image_url || '').toString().trim();
@@ -600,12 +640,38 @@ export async function validateCompanyImportData(
     // Required Field Validations
     if (!key) {
       errors.push('Missing required field "company_key". (e.g. C001)');
+    } else if (key.length > 32) {
+      warnings.push(`"company_key" "${key}" is unusually long (>32 chars).`);
     }
+
     if (!name) {
       errors.push('Missing required field "company_name".');
     }
-    if (!category) {
-      errors.push('Missing required field "category". (e.g. Restaurant, Cafe, Hotel, Bar, Retail, etc.)');
+
+    if (!shortName) {
+      warnings.push('Missing "short_name". NABSITE will derive it from the full company name.');
+    } else if (shortName.length > 30) {
+      warnings.push(`"short_name" "${shortName}" is long (>30 chars). Consider a compact 1-3 word abbreviation.`);
+    }
+
+    // Category Validation against NABSITE Category Registry
+    if (!rawCategory) {
+      errors.push('Missing required field "category". Must be selected from NABSITE Category Registry.');
+    } else if (!categoriesLowerSet.has(rawCategory.toLowerCase())) {
+      warnings.push(
+        `Category "${rawCategory}" is not in the standard NABSITE Category Registry. We recommend selecting a registered category.`
+      );
+    }
+
+    // Country & City Validation
+    if (!rawCountry) {
+      warnings.push('No country specified. Defaulting to "Ethiopia".');
+    } else if (!countriesLowerSet.has(rawCountry.toLowerCase())) {
+      warnings.push(`Country "${rawCountry}" is outside the standard regional registry.`);
+    }
+
+    if (!rawCity) {
+      warnings.push('No city specified. Defaulting to "Addis Ababa".');
     }
 
     // Duplicate Key In File
@@ -613,7 +679,7 @@ export async function validateCompanyImportData(
       errors.push(`Duplicate "company_key" "${key}" appears multiple times in this spreadsheet.`);
     }
 
-    // Status check
+    // Controlled Status check
     const allowedStatuses = ['active', 'draft', 'suspended', 'archived'];
     if (status && !allowedStatuses.includes(status)) {
       warnings.push(`Status "${status}" is unrecognized; defaulting to "active".`);
@@ -622,15 +688,15 @@ export async function validateCompanyImportData(
     // Image URL validations
     if (logo) {
       if (!isValidHttpUrl(logo)) {
-        errors.push(`Invalid logo image URL "${logo}". Must be a valid http:// or https:// URL.`);
+        errors.push(`Invalid logo image URL "${logo}". Must be a direct http:// or https:// link.`);
       }
     } else {
-      warnings.push('No logo URL provided. A curated category placeholder will be assigned.');
+      warnings.push('No logo URL provided. A curated brand placeholder will be assigned.');
     }
 
     if (cover) {
       if (!isValidHttpUrl(cover)) {
-        errors.push(`Invalid cover image URL "${cover}". Must be a valid http:// or https:// URL.`);
+        errors.push(`Invalid cover image URL "${cover}". Must be a direct http:// or https:// link.`);
       }
     } else {
       warnings.push('No cover image URL provided. A curated backdrop will be assigned.');
@@ -641,7 +707,7 @@ export async function validateCompanyImportData(
       warnings.push(`Google Maps URL "${maps}" appears invalid.`);
     }
     if (web && !isValidHttpUrl(web)) {
-      warnings.push(`Website URL "${web}" appears invalid.`);
+      warnings.push(`External website URL "${web}" appears invalid.`);
     }
     if (fb && !isValidHttpUrl(fb)) {
       warnings.push(`Facebook URL "${fb}" appears invalid.`);
@@ -663,7 +729,7 @@ export async function validateCompanyImportData(
 
     // Contact completeness
     if (!rawRow.phone && !rawRow.whatsapp && !email) {
-      warnings.push('No contact info (phone, whatsapp, or email) provided.');
+      warnings.push('No contact phone, whatsapp, or email provided.');
     }
 
     // Slug generation & collision detection
@@ -686,6 +752,9 @@ export async function validateCompanyImportData(
       if (match) matchedCompanyId = match.id;
     }
 
+    // Build human-readable opening hours
+    const openingHoursSummary = buildOpeningHoursSummary(rawRow);
+
     // Row status evaluation
     let rowStatus: 'valid' | 'warning' | 'error' = 'valid';
     if (errors.length > 0) {
@@ -704,6 +773,7 @@ export async function validateCompanyImportData(
       isExistingSlug,
       generatedSlug,
       matchedCompanyId,
+      openingHoursSummary,
     });
   });
 
@@ -773,7 +843,7 @@ export async function executeBulkCompanyImport(
     `Bulk company import initiated for ${totalToProcess} entities (Duplicate mode: ${duplicateMode})`
   ).catch(() => {});
 
-  // Controlled Batch Processing (Chunks of 10 for optimal Firestore throughput without freezing)
+  // Controlled Batch Processing (Chunks of 5 for optimal Firestore throughput without freezing)
   const CHUNK_SIZE = 5;
   for (let i = 0; i < actionableRows.length; i += CHUNK_SIZE) {
     const chunk = actionableRows.slice(i, i + CHUNK_SIZE);
@@ -787,6 +857,7 @@ export async function executeBulkCompanyImport(
         const category = (itemRaw.category || 'Restaurant').toString().trim();
         const slug = row.generatedSlug || generateSlug(name);
         const nowIso = new Date().toISOString();
+        const hoursString = row.openingHoursSummary || 'Mon - Sun: 8:00 AM - 10:00 PM';
 
         try {
           if (row.isExistingKey && (duplicateMode === 'update_existing' || duplicateMode === 'create_and_update') && row.matchedCompanyId) {
@@ -806,6 +877,7 @@ export async function executeBulkCompanyImport(
               address: itemRaw.address || undefined,
               city: itemRaw.city || undefined,
               mapLink: itemRaw.google_maps_url || undefined,
+              openingHours: hoursString,
               status: (itemRaw.status as any) || 'active',
               updatedAt: nowIso,
               metadata: {
@@ -836,7 +908,7 @@ export async function executeBulkCompanyImport(
 
             if (row.warnings.length > 0) warningCount++;
 
-            await logAudit('COMPANY_UPDATED_FROM_IMPORT', 'COMPANY', targetCompId, `Updated ${name} (key: ${key}) from bulk import`, name).catch(() => {});
+            await logAudit('COMPANY_UPDATED', 'COMPANY', targetCompId, `Updated ${name} (key: ${key}) from bulk import`, name).catch(() => {});
           } else {
             // --- CREATE NEW COMPANY ---
             const compId = `comp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
@@ -859,7 +931,7 @@ export async function executeBulkCompanyImport(
               address: itemRaw.address || 'Bole Road, Addis Ababa',
               city: itemRaw.city || 'Addis Ababa',
               mapLink: itemRaw.google_maps_url || 'https://maps.google.com/?q=Addis+Ababa',
-              openingHours: 'Mon - Sun: 8:00 AM - 10:00 PM',
+              openingHours: hoursString,
               status: (itemRaw.status as any) || 'active',
               websiteStatus: 'draft',
               websiteId: webId,
@@ -1091,14 +1163,14 @@ export async function executeBulkCompanyImport(
   const durationMs = Date.now() - startTime;
   if (failedCount > 0 && createdCount === 0 && updatedCount === 0) {
     await logAudit(
-      'BULK_IMPORT_FAILED',
+      'BULK_COMPANY_IMPORT_FAILED',
       'SYSTEM',
       `import_${Date.now()}`,
       `Bulk company import failed completely: ${failedCount} errors`
     ).catch(() => {});
   } else {
     await logAudit(
-      'BULK_IMPORT_COMPLETED',
+      'BULK_COMPANY_IMPORT_COMPLETED',
       'SYSTEM',
       `import_${Date.now()}`,
       `Bulk import completed in ${durationMs}ms: Created: ${createdCount}, Updated: ${updatedCount}, Failed: ${failedCount}`
@@ -1131,7 +1203,6 @@ export async function executeBulkMenuImport(
   let updated = 0;
   let failed = 0;
   const errors: string[] = [];
-  const nowIso = new Date().toISOString();
 
   // Fetch existing categories to reuse or create new
   const existingCats = await api.getProductCategories(companyId).catch(() => []);

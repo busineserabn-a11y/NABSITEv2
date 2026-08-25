@@ -28,6 +28,7 @@ import {
   SAMPLE_COMPANIES_DATA,
   downloadSpreadsheetFile,
   downloadFailedRowsCsv,
+  downloadOfficialExcelTemplate,
   parseUploadedFile,
   validateCompanyImportData,
   executeBulkCompanyImport,
@@ -58,6 +59,7 @@ export const BulkCompanyImportPage: React.FC = () => {
 
   // Guide Modal
   const [guideModalOpen, setGuideModalOpen] = useState(false);
+  const [isDownloadingOfficial, setIsDownloadingOfficial] = useState(false);
 
   // Live import progress
   const [progress, setProgress] = useState<ImportProgress>({
@@ -91,6 +93,18 @@ export const BulkCompanyImportPage: React.FC = () => {
   }, []);
 
   // Handlers for template downloads
+  const handleDownloadOfficialControlled = async () => {
+    setIsDownloadingOfficial(true);
+    try {
+      await downloadOfficialExcelTemplate();
+    } catch (err) {
+      console.error('Failed to generate controlled template:', err);
+      setErrorBanner('Failed to generate official Excel template.');
+    } finally {
+      setIsDownloadingOfficial(false);
+    }
+  };
+
   const handleDownloadBlank = (format: 'xlsx' | 'csv') => {
     const emptyRow: Record<string, string> = {};
     COMPANY_IMPORT_COLUMNS.forEach((col) => {
@@ -269,66 +283,124 @@ export const BulkCompanyImportPage: React.FC = () => {
       {/* ========================================================================= */}
       {step === 'upload' && (
         <div className="space-y-6">
-          {/* Download Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="p-5 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
-                  <FileSpreadsheet className="w-5 h-5" />
+          {/* Primary Controlled Excel Template Banner */}
+          <div className="p-6 rounded-3xl bg-linear-to-br from-emerald-500/10 via-amber-500/5 to-slate-900/5 dark:from-emerald-950/40 dark:via-slate-900 dark:to-slate-900 border border-emerald-500/30 dark:border-emerald-500/20 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-xs">
+                  <FileSpreadsheet className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Download Blank Company Template
+                  <div className="flex items-center gap-2">
+                    <Badge variant="success" size="sm">
+                      Recommended
+                    </Badge>
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Official Form-Controlled Workbook
+                    </span>
+                  </div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white mt-1">
+                    Official NABSITE Controlled Excel Template (.xlsx)
                   </h3>
-                  <p className="text-xs text-slate-500">
-                    Official format with all 20 standardized NABSITE entity columns.
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-2xl">
+                    Multi-sheet formatted workbook with <strong>interactive Excel dropdowns</strong> (Business Categories, Status, Countries, Time Slots), field classification color-coding, cell protection, and a built-in Error Reference Guide.
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <Button
-                  size="sm"
-                  variant="outline"
+                  size="md"
+                  variant="primary"
                   icon={Download}
-                  onClick={() => handleDownloadBlank('xlsx')}
+                  isLoading={isDownloadingOfficial}
+                  onClick={handleDownloadOfficialControlled}
                 >
-                  Excel (.xlsx)
+                  Download Controlled Template
                 </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-emerald-500/10 dark:border-emerald-500/10 text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+              <div className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                <span>5 Formatted Sheets</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Dropdown Validations</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Pre-filled Examples</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Live Error Guide</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Secondary Download Cards (CSV / Quick Sample) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-5 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                    Raw CSV / Spreadsheet Format
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Single-sheet standard header columns for automated pipeline imports.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
                 <Button
                   size="sm"
                   variant="outline"
                   icon={Download}
                   onClick={() => handleDownloadBlank('csv')}
                 >
-                  CSV (.csv)
+                  Download Blank CSV
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={Download}
+                  onClick={() => handleDownloadBlank('xlsx')}
+                >
+                  Plain XLSX
                 </Button>
               </div>
             </div>
 
-            <div className="p-5 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="p-5 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-                  <Sparkles className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Download Example Pre-Filled File
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Includes 3 realistic companies (Addis Gourmet, Entoto Coffee, Harmony Clinic).
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                    Pre-filled Sample Dataset
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Sample dataset containing 3 realistic Ethiopian enterprises ready to test.
                   </p>
                 </div>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-1">
                 <Button
                   size="sm"
                   variant="secondary"
                   icon={Download}
                   onClick={handleDownloadSample}
                 >
-                  Download Sample Dataset
+                  Download Sample XLSX
                 </Button>
               </div>
             </div>
@@ -841,60 +913,106 @@ export const BulkCompanyImportPage: React.FC = () => {
       <Modal
         isOpen={guideModalOpen}
         onClose={() => setGuideModalOpen(false)}
-        title="NABSITE Spreadsheet Column Guide"
-        description="Comprehensive reference for all standard entity fields, constraints, and accepted values."
-        maxWidth="2xl"
+        title="NABSITE Spreadsheet & Workbook Guide"
+        description="Comprehensive reference for the official multi-sheet Excel workbook, columns, constraints, and validation rules."
+        maxWidth="3xl"
       >
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold sticky top-0">
-                <tr>
-                  <th className="p-3">Column Name</th>
-                  <th className="p-3">Required</th>
-                  <th className="p-3">Example</th>
-                  <th className="p-3">Description & Validation Rules</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-600 dark:text-slate-300">
-                {COMPANY_IMPORT_COLUMNS.map((col) => (
-                  <tr key={col.key} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="p-3 font-mono font-bold text-amber-600 dark:text-amber-400">
-                      {col.key}
-                    </td>
-                    <td className="p-3">
-                      {col.required ? (
-                        <Badge size="sm" variant="danger">
-                          Required
-                        </Badge>
-                      ) : (
-                        <Badge size="sm" variant="neutral">
-                          Optional
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="p-3 font-medium text-slate-800 dark:text-slate-200">
-                      {col.example}
-                    </td>
-                    <td className="p-3 text-[11px] text-slate-500 dark:text-slate-400">
-                      {col.desc}
-                    </td>
+        <div className="space-y-6 max-h-[75vh] overflow-y-auto pr-1">
+          {/* Workbook Sheet Architecture */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+              Controlled Workbook Structure (5 Sheets)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                <span className="font-bold text-amber-600 dark:text-amber-400">1. START_HERE</span>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                  Welcome manual, 7-step checklist, visual color guide (Required / Optional / System), and image link rules.
+                </p>
+              </div>
+              <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">2. COMPANIES (Main Form)</span>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                  The primary data table with Excel dropdowns for Category, Status, Country, City, and Hours.
+                </p>
+              </div>
+              <div className="p-3 rounded-2xl bg-sky-500/10 border border-sky-500/20">
+                <span className="font-bold text-sky-600 dark:text-sky-400">3. OPTIONS (Master Lists)</span>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                  Protected lists powering the Excel in-cell dropdowns. Ensures exact data compatibility.
+                </p>
+              </div>
+              <div className="p-3 rounded-2xl bg-purple-500/10 border border-purple-500/20">
+                <span className="font-bold text-purple-600 dark:text-purple-400">4. EXAMPLE (Reference Rows)</span>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                  Ready-to-view rows illustrating realistic restaurants, cafes, and healthcare providers.
+                </p>
+              </div>
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 sm:col-span-2">
+                <span className="font-bold text-rose-600 dark:text-rose-400">5. ERROR_GUIDE (Self-Help Diagnostic)</span>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                  Common validation error codes, explanation of why they happen, and step-by-step resolution.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Columns Table */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+              Entity Columns Specification
+            </h4>
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold sticky top-0">
+                  <tr>
+                    <th className="p-3">Column Name</th>
+                    <th className="p-3">Required</th>
+                    <th className="p-3">Example</th>
+                    <th className="p-3">Description & Validation Rules</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
+                  {COMPANY_IMPORT_COLUMNS.map((col) => (
+                    <tr key={col.key} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="p-3 font-mono font-bold text-amber-600 dark:text-amber-400">
+                        {col.key}
+                      </td>
+                      <td className="p-3">
+                        {col.required ? (
+                          <Badge size="sm" variant="danger">
+                            Required
+                          </Badge>
+                        ) : (
+                          <Badge size="sm" variant="neutral">
+                            Optional
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="p-3 font-medium text-slate-800 dark:text-slate-200">
+                        {col.example}
+                      </td>
+                      <td className="p-3 text-[11px] text-slate-500 dark:text-slate-400">
+                        {col.desc}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="flex items-center justify-between pt-2">
             <Button
               size="sm"
-              variant="outline"
+              variant="primary"
               icon={Download}
-              onClick={() => handleDownloadBlank('xlsx')}
+              isLoading={isDownloadingOfficial}
+              onClick={handleDownloadOfficialControlled}
             >
-              Download Template (.xlsx)
+              Download Controlled (.xlsx)
             </Button>
-            <Button size="sm" variant="primary" onClick={() => setGuideModalOpen(false)}>
+            <Button size="sm" variant="outline" onClick={() => setGuideModalOpen(false)}>
               Close Guide
             </Button>
           </div>
