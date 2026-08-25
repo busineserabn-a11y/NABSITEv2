@@ -16,6 +16,7 @@ import {
   Lock,
   Building2,
   ExternalLink,
+  Sliders,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -25,6 +26,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Table } from '../../components/ui/Table';
+import { PermissionsManagerModal } from '../../components/admin/PermissionsManagerModal';
 
 export const AdminTeamPage: React.FC = () => {
   const { user: currentUser, resetPassword } = useAuth();
@@ -58,6 +60,10 @@ export const AdminTeamPage: React.FC = () => {
     companyName?: string;
   } | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // Dynamic Permissions Management Modal (Owner Only)
+  const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
+  const [selectedUserForPermissions, setSelectedUserForPermissions] = useState<User | null>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -383,6 +389,20 @@ Please sign in and change your password in settings upon first login.`;
               }
               return (
                 <div className="flex items-center gap-1.5">
+                  {isOwner && (
+                    <button
+                      onClick={() => {
+                        setSelectedUserForPermissions(u);
+                        setPermissionsModalOpen(true);
+                      }}
+                      title="Configure Granular Permissions & Scopes"
+                      className="px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-xs font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      <Shield className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Permissions</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => handleSendReset(u)}
                     disabled={actionLoading}
@@ -674,6 +694,24 @@ Please sign in and change your password in settings upon first login.`;
           </div>
         )}
       </Modal>
+
+      {/* Owner Dynamic Permissions & Scope Management Modal */}
+      <PermissionsManagerModal
+        isOpen={permissionsModalOpen}
+        onClose={() => {
+          setPermissionsModalOpen(false);
+          setSelectedUserForPermissions(null);
+        }}
+        user={selectedUserForPermissions}
+        companies={companies}
+        onPermissionsUpdated={(updatedUser) => {
+          setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+          setFeedback({
+            type: 'success',
+            message: `Permissions updated successfully for ${updatedUser.name}.`,
+          });
+        }}
+      />
     </div>
   );
 };

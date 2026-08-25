@@ -86,7 +86,9 @@ export async function logAudit(
   entityType: string,
   entityId: string,
   details?: string,
-  targetName?: string
+  targetName?: string,
+  companyId?: string,
+  metadata?: Record<string, any>
 ): Promise<void> {
   try {
     const user = auth.currentUser;
@@ -100,7 +102,9 @@ export async function logAudit(
       entityType,
       entityId,
       targetName: targetName || '',
+      companyId: companyId || '',
       details: details || '',
+      metadata: metadata || {},
       timestamp: new Date().toISOString(),
     };
 

@@ -17,8 +17,7 @@ service cloud.firestore {
       return isSignedIn() && (
         request.auth.token.email == 'abenezarofficial1@gmail.com' ||
         request.auth.token.email == 'busineser.abn@gmail.com' ||
-        request.auth.token.email == 'owner@nabsite.io' ||
-        request.auth.token.email == 'owner@nabsite.et'
+        request.auth.token.email == 'owner@nabsite.io'
       );
     }
 
@@ -27,7 +26,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isOwner() || (getUserData() != null && getUserData().role == 'ADMIN');
+      return isOwner() || (getUserData() != null && (getUserData().role == 'ADMIN' || getUserData().role == 'OWNER'));
     }
 
     function isSubAdmin(companyId) {
@@ -41,11 +40,16 @@ service cloud.firestore {
       );
     }
 
-    // Users Collection
+    // Users Collection - ONLY Owner can update permissionMatrix, role, or company assignments
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create, update: if isOwner() || isAdmin() || (isSignedIn() && request.auth.uid == userId);
-      allow delete: if isOwner() || isAdmin();
+      allow create: if isOwner() || isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow update: if isOwner() || (
+        isSignedIn() && request.auth.uid == userId &&
+        // Self updates cannot elevate role or change permissions
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissionMatrix', 'assignedCompanyIds', 'assignedCompanyId'])
+      );
+      allow delete: if isOwner();
     }
 
     // Companies Collection
@@ -103,11 +107,11 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
-    // Audit Logs (Zero-Trust Immutable)
+    // Audit Logs (Zero-Trust Immutable Audit Trail)
     match /auditLogs/{logId} {
       allow read: if isSignedIn();
       allow create: if true;
-      allow update, delete: if false; // Immutable audit logs
+      allow update, delete: if false;
     }
 
     // Analytics Events

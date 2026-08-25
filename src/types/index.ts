@@ -49,8 +49,10 @@ export interface User {
   role: Role;
   avatar?: string;
   assignedCompanyId?: string; // For SUB_ADMIN
-  assignedCompanyIds?: string[]; // For ADMIN
+  assignedCompanyIds?: string[]; // For ADMIN or SUB_ADMIN multi-company
+  assignedAllCompanies?: boolean; // For ADMIN (true = full access to all companies)
   permissions?: SubAdminPermission[];
+  permissionMatrix?: Record<string, string[]>;
   status: 'active' | 'disabled' | 'pending' | 'suspended';
   createdAt: string;
   updatedAt?: string;
@@ -91,6 +93,7 @@ export interface Company {
   category: string;
   subcategory?: string;
   shortDescription: string;
+  description?: string;
   fullDescription?: string;
   phone: string;
   email: string;
@@ -178,7 +181,10 @@ export interface SectionConfig {
   isVisible: boolean;
   title?: string;
   subtitle?: string;
+  badgeText?: string;
+  bgImageUrl?: string;
   content?: any;
+  bodyContent?: string;
   layoutVariant?: string;
   design?: SectionDesignConfig;
   cta?: CtaConfig;
@@ -186,6 +192,17 @@ export interface SectionConfig {
   alignment?: 'left' | 'center' | 'right';
   ctaText?: string;
   ctaLink?: string;
+  ctaUrl?: string;
+  secondaryCtaText?: string;
+  secondaryCtaUrl?: string;
+  showCategories?: boolean;
+  showSearch?: boolean;
+  showPrices?: boolean;
+  containerWidth?: 'contained' | 'wide' | 'full';
+  padding?: 'compact' | 'normal' | 'generous';
+  customBgColor?: string;
+  customTextColor?: string;
+  anchorId?: string;
   customHtml?: string;
 }
 
@@ -207,6 +224,11 @@ export interface PageConfig {
   isPublished?: boolean;
   isHidden?: boolean;
   showInNavigation?: boolean;
+  template?: 'standard' | 'landing' | 'contained' | 'fluid';
+  customBgColor?: string;
+  customPattern?: string;
+  metaTitle?: string;
+  metaDescription?: string;
   sections: SectionConfig[];
   seo?: PageSeo;
 }
@@ -214,22 +236,48 @@ export interface PageConfig {
 export interface NavItem {
   id: string;
   label: string;
-  type: 'page' | 'external' | 'anchor';
+  type: 'page' | 'external' | 'anchor' | 'menu' | 'offers' | 'contact' | 'custom_url';
   target: string;
+  url?: string;
   order: number;
   openNewTab?: boolean;
+  targetBlank?: boolean;
+  isHidden?: boolean;
+  badge?: string;
+  children?: NavItem[];
 }
 
 export interface HeaderConfig {
   showLogo: boolean;
   showCompanyName: boolean;
-  style: 'standard' | 'centered' | 'split' | 'minimal' | 'transparent';
+  style: 'standard' | 'centered' | 'split' | 'minimal' | 'transparent' | 'floating' | 'glass';
   sticky: boolean;
+  headerHeight?: string;
+  logoSize?: 'sm' | 'md' | 'lg' | 'xl';
   showPhoneBtn: boolean;
   showTelegramBtn: boolean;
   showCtaBtn: boolean;
   ctaText?: string;
+  ctaLabel?: string;
   ctaTarget?: string;
+  ctaUrl?: string;
+  ctaAction?: 'url' | 'phone' | 'telegram' | 'menu' | 'reserve';
+  ctaStyle?: 'primary' | 'secondary' | 'outline' | 'amber';
+  mobileMenuStyle?: 'drawer' | 'dropdown' | 'fullscreen';
+  backgroundColor?: string;
+  transparentOnTop?: boolean;
+  transparentOnHero?: boolean;
+  textColor?: string;
+  announcementBanner?: {
+    enabled: boolean;
+    text: string;
+    linkUrl?: string;
+    linkText?: string;
+    actionText?: string;
+    actionUrl?: string;
+    bgColor?: string;
+    textColor?: string;
+  };
 }
 
 export interface FooterConfig {

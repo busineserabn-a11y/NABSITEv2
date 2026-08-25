@@ -21,6 +21,8 @@ import {
   Megaphone,
   Tag,
   Image,
+  Sliders,
+  Settings,
 } from 'lucide-react';
 import { WebsitePage } from '../../types';
 import { Modal } from '../ui/Modal';
@@ -31,6 +33,7 @@ interface StudioPagesSidebarProps {
   pages: WebsitePage[];
   activePageSlug: string;
   onSelectPage: (slug: string) => void;
+  onOpenPageSettings?: (slug: string) => void;
   onAddPage: (page: { name: string; slug: string; title: string; template: string }) => void;
   onUpdatePage: (id: string, updates: Partial<WebsitePage>) => void;
   onDeletePage: (id: string) => void;
@@ -55,6 +58,7 @@ export const StudioPagesSidebar: React.FC<StudioPagesSidebarProps> = ({
   pages,
   activePageSlug,
   onSelectPage,
+  onOpenPageSettings,
   onAddPage,
   onUpdatePage,
   onDeletePage,
@@ -208,6 +212,17 @@ export const StudioPagesSidebar: React.FC<StudioPagesSidebarProps> = ({
 
                 {/* Page Action Icons */}
                 <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
+                  {onOpenPageSettings && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenPageSettings(page.slug)}
+                      className="p-1 text-slate-400 hover:text-amber-300 transition-colors"
+                      title="Page Layout & SEO Customizer"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => startRename(page)}

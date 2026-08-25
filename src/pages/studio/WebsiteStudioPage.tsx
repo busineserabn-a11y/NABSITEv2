@@ -22,6 +22,7 @@ import {
   Settings,
   X,
   ExternalLink,
+  Menu,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import {
@@ -49,11 +50,13 @@ import { StudioDesignEditor } from '../../components/studio/StudioDesignEditor';
 import { StudioQrPanel } from '../../components/studio/StudioQrPanel';
 import { StudioFeaturesPanel } from '../../components/studio/StudioFeaturesPanel';
 import { StudioSettingsPanel } from '../../components/studio/StudioSettingsPanel';
+import { StudioNavigationManager } from '../../components/studio/StudioNavigationManager';
+import { StudioPageCustomizer } from '../../components/studio/StudioPageCustomizer';
 import { TemplateSwitcherModal } from '../../components/studio/TemplateSwitcherModal';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 
-type StudioWorkspaceTab = 'pages' | 'sections' | 'menu' | 'design' | 'qr' | 'features' | 'settings';
+type StudioWorkspaceTab = 'pages' | 'page_edit' | 'sections' | 'navigation' | 'menu' | 'design' | 'qr' | 'features' | 'settings';
 
 export const WebsiteStudioPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -691,6 +694,20 @@ export const WebsiteStudioPage: React.FC = () => {
 
           <button
             type="button"
+            onClick={() => setActiveTab('navigation')}
+            className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center transition-all ${
+              activeTab === 'navigation'
+                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-black'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+            title="Header & Navigation Builder"
+          >
+            <Menu className="w-4 h-4" />
+            <span className="text-[8px] font-bold mt-0.5">Nav</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('menu')}
             className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center transition-all ${
               activeTab === 'menu'
@@ -770,10 +787,46 @@ export const WebsiteStudioPage: React.FC = () => {
                 setActivePageSlug(slug);
                 setActiveSectionId(null);
               }}
+              onOpenPageSettings={(slug) => {
+                setActivePageSlug(slug);
+                setActiveTab('page_edit');
+              }}
               onAddPage={handleAddPage}
               onUpdatePage={handleUpdatePage}
               onDeletePage={handleDeletePage}
               onReorderPages={handleReorderPages}
+            />
+          )}
+
+          {activeTab === 'page_edit' && (
+            <StudioPageCustomizer
+              company={company}
+              page={activePage}
+              pages={pages}
+              onUpdatePage={(updates) => handleUpdatePage(activePage.id, updates)}
+              onSetAsHome={() => {
+                const updated = pages.map((p) => ({
+                  ...p,
+                  isHome: p.id === activePage.id,
+                }));
+                handleUpdateConfig({ ...config, pages: updated });
+              }}
+              onDuplicatePage={() => {
+                const newPage: WebsitePage = {
+                  ...activePage,
+                  id: `page_${Date.now()}`,
+                  name: `${activePage.name} (Copy)`,
+                  slug: `${activePage.slug}-copy`,
+                  isHome: false,
+                  sections: (activePage.sections || []).map((sec) => ({
+                    ...sec,
+                    id: `sec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                  })),
+                };
+                handleUpdateConfig({ ...config, pages: [...pages, newPage] });
+                setActivePageSlug(newPage.slug);
+              }}
+              onDeletePage={() => handleDeletePage(activePage.id)}
             />
           )}
 
@@ -786,6 +839,21 @@ export const WebsiteStudioPage: React.FC = () => {
               onUpdateSection={handleUpdateSection}
               onDeleteSection={handleDeleteSection}
               onReorderSections={handleReorderSections}
+            />
+          )}
+
+          {activeTab === 'navigation' && (
+            <StudioNavigationManager
+              company={company}
+              pages={pages}
+              navigation={config.navigation}
+              header={config.header}
+              onUpdateNavigation={(nav) => {
+                handleUpdateConfig({ ...config, navigation: nav });
+              }}
+              onUpdateHeader={(hdr) => {
+                handleUpdateConfig({ ...config, header: { ...config.header, ...hdr } as any });
+              }}
             />
           )}
 

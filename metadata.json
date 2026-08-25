@@ -1,6 +1,6 @@
 {
   "name": "NABSITE",
-  "description": "Managed digital identity and website creation platform with Website Studio, 324 bespoke templates across 18 business categories, and Mastermind management.",
+  "description": "Managed digital identity and website creation platform with Website Studio 2.1, WordPress-grade visual page & navigation editing, Owner-controlled permissions matrix, and Mastermind management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

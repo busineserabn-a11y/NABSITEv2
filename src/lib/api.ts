@@ -38,6 +38,7 @@ import { INITIAL_CATEGORIES, INITIAL_SETTINGS, INITIAL_COMPANIES, INITIAL_WEBSIT
 import { THEME_REGISTRY } from '../data/themes';
 import { FEATURE_REGISTRY } from '../data/features';
 import { withTimeout, logAudit, logError } from './firestoreUtils';
+import { CANONICAL_BASE_URL, buildPublicUrl, buildQrDestinationUrl } from './urls';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public details?: any) {
@@ -182,6 +183,83 @@ export const api = {
     } catch (err) {
       logError('updateUser', err, { id });
       throw new ApiError(500, 'Failed to update user');
+    }
+  },
+
+  updateUserPermissions: async (
+    userId: string,
+    permissionsData: {
+      permissions?: any[];
+      permissionMatrix?: Record<string, string[]>;
+      assignedCompanyIds?: string[];
+      assignedAllCompanies?: boolean;
+      actor?: { id: string; name: string; role: any; email: string };
+    }
+  ): Promise<User> => {
+    try {
+      const userRef = doc(firestoreDb, 'users', userId);
+      const existingSnap = await getDoc(userRef);
+      if (!existingSnap.exists()) {
+        throw new ApiError(404, `User ${userId} not found in Firestore`);
+      }
+      const existingUser = existingSnap.data() as User;
+
+      const updatePayload: Partial<User> = {
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (permissionsData.permissions !== undefined) {
+        updatePayload.permissions = permissionsData.permissions;
+      }
+      if (permissionsData.permissionMatrix !== undefined) {
+        updatePayload.permissionMatrix = permissionsData.permissionMatrix;
+      }
+      if (permissionsData.assignedCompanyIds !== undefined) {
+        updatePayload.assignedCompanyIds = permissionsData.assignedCompanyIds;
+        if (permissionsData.assignedCompanyIds.length > 0) {
+          updatePayload.assignedCompanyId = permissionsData.assignedCompanyIds[0];
+        }
+      }
+      if (permissionsData.assignedAllCompanies !== undefined) {
+        updatePayload.assignedAllCompanies = permissionsData.assignedAllCompanies;
+      }
+
+      await withTimeout(setDoc(userRef, updatePayload, { merge: true }), 10000);
+      const updatedSnap = await getDoc(userRef);
+      const updatedUser = { id: updatedSnap.id, ...updatedSnap.data() } as User;
+
+      const actorInfo = permissionsData.actor || {
+        id: 'owner_master',
+        name: 'Platform Owner',
+        role: 'OWNER',
+        email: 'abenezarofficial1@gmail.com',
+      };
+
+      await logAudit(
+        'PERMISSION_UPDATE',
+        'USER',
+        userId,
+        `Owner updated permissions for ${existingUser.name} (${existingUser.email})`,
+        existingUser.name,
+        undefined,
+        {
+          actorId: actorInfo.id,
+          actorName: actorInfo.name,
+          actorRole: actorInfo.role,
+          targetUserEmail: existingUser.email,
+          targetUserRole: existingUser.role,
+          previousMatrix: existingUser.permissionMatrix || {},
+          newMatrix: updatedUser.permissionMatrix || {},
+          assignedCompanyIds: updatedUser.assignedCompanyIds || [],
+          assignedAllCompanies: updatedUser.assignedAllCompanies,
+        }
+      );
+
+      return updatedUser;
+    } catch (err: any) {
+      logError('updateUserPermissions', err, { userId });
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(500, `Failed to update user permissions: ${err.message || err}`);
     }
   },
 
@@ -1269,7 +1347,7 @@ export const api = {
   }): Promise<{ dataUrl: string; normalizedUrl: string; svgString?: string }> => {
     let normalized = (params.url || '').trim();
     if (!normalized) {
-      normalized = 'https://nabsite.et';
+      normalized = CANONICAL_BASE_URL;
     }
     if (!/^https?:\/\//i.test(normalized)) {
       normalized = `https://${normalized}`;
@@ -1340,7 +1418,7 @@ export const api = {
     margin?: number;
   }): Promise<string> => {
     let normalized = (params.url || '').trim();
-    if (!normalized) normalized = 'https://nabsite.et';
+    if (!normalized) normalized = CANONICAL_BASE_URL;
     if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
 
     return await QRCode.toString(normalized, {
@@ -1361,7 +1439,7 @@ export const api = {
       companyId: data.companyId || '',
       name: data.name || data.title || 'Official Digital Stand',
       title: data.title || data.name || 'Official Digital Stand',
-      targetUrl: data.targetUrl || 'https://nabsite.et',
+      targetUrl: data.targetUrl || CANONICAL_BASE_URL,
       targetType: data.targetType || 'website',
       pageSlug: data.pageSlug || '',
       caption: data.caption || 'SCAN WITH PHONE CAMERA',
