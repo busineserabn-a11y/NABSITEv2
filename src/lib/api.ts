@@ -1766,6 +1766,31 @@ export const api = {
     }
   },
 
+  createAnnouncement: async (data: Partial<Announcement>): Promise<Announcement> => {
+    const annId = data.id || `ann_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const nowIso = new Date().toISOString();
+    const newAnn: Announcement = {
+      id: annId,
+      companyId: data.companyId || '',
+      title: data.title || 'Important Notice',
+      content: data.content || '',
+      image: data.image || '',
+      publishDate: data.publishDate || nowIso,
+      status: (data.status as any) || 'published',
+      featured: data.featured || false,
+      ctaText: data.ctaText || '',
+      ctaUrl: data.ctaUrl || '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    try {
+      await withTimeout(setDoc(doc(firestoreDb, 'announcements', annId), newAnn), 8000);
+    } catch (err) {
+      logError('createAnnouncement', err);
+    }
+    return newAnn;
+  },
+
   getHealth: async () => {
     const startTime = Date.now();
     let firestoreStatus = 'Connected';

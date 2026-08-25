@@ -36,8 +36,10 @@ import {
   Check,
   X,
   Code2,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { SubModuleImportModal, SubModuleType } from '../../components/company/SubModuleImportModal';
 import {
   Company,
   Website,
@@ -80,6 +82,13 @@ export const OwnerCompanyDetailPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Sub-module Import Modal State
+  const [subImportModal, setSubImportModal] = useState<{
+    isOpen: boolean;
+    type: SubModuleType;
+  }>({ isOpen: false, type: 'menu' });
+  const [importMenuDropdownOpen, setImportMenuDropdownOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<
     'overview' | 'info' | 'website' | 'features' | 'themes' | 'subadmins' | 'analytics' | 'audit' | 'qr'
@@ -538,6 +547,42 @@ export const OwnerCompanyDetailPage: React.FC = () => {
 
         {/* Action Buttons Cluster */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Sub-module Bulk Ingestion Dropdown */}
+          <div className="relative">
+            <Button
+              size="sm"
+              variant="outline"
+              icon={FileSpreadsheet}
+              onClick={() => setImportMenuDropdownOpen(!importMenuDropdownOpen)}
+              className="text-xs font-bold"
+            >
+              Import Data ▾
+            </Button>
+            {importMenuDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 space-y-1">
+                {[
+                  { type: 'menu' as SubModuleType, label: 'Digital Menu Items' },
+                  { type: 'pages' as SubModuleType, label: 'Website Custom Pages' },
+                  { type: 'offers' as SubModuleType, label: 'Promotional Offers' },
+                  { type: 'announcements' as SubModuleType, label: 'Announcements' },
+                  { type: 'qr' as SubModuleType, label: 'QR Stand Configurations' },
+                ].map((item) => (
+                  <button
+                    key={item.type}
+                    onClick={() => {
+                      setImportMenuDropdownOpen(false);
+                      setSubImportModal({ isOpen: true, type: item.type });
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold hover:bg-amber-500/10 hover:text-amber-500 text-slate-700 dark:text-slate-200 transition-colors flex items-center justify-between"
+                  >
+                    <span>{item.label}</span>
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <Link to={`/c/${company.slug}`} target="_blank">
             <Button size="sm" variant="outline" icon={ExternalLink}>
               View Site
@@ -1508,6 +1553,22 @@ Login URL: ${window.location.origin}/login
           </div>
         )}
       </Modal>
+
+      {/* Sub-Module Bulk Ingestion Modal */}
+      {company && (
+        <SubModuleImportModal
+          isOpen={subImportModal.isOpen}
+          onClose={() => setSubImportModal({ ...subImportModal, isOpen: false })}
+          moduleType={subImportModal.type}
+          companyId={company.id}
+          companyName={company.name}
+          companyKey={company.id.slice(0, 8)}
+          onSuccess={() => {
+            fetchData();
+            showNotification(`Bulk ingestion for ${subImportModal.type} completed successfully.`);
+          }}
+        />
+      )}
     </div>
   );
 };

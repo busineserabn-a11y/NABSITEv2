@@ -23,6 +23,7 @@ import { WebsitesListPage } from './pages/websites/WebsitesListPage';
 // Owner God Mode pages
 import { OwnerOverviewPage } from './pages/owner/OwnerOverviewPage';
 import { OwnerCompaniesPage } from './pages/owner/OwnerCompaniesPage';
+import { BulkCompanyImportPage } from './pages/owner/BulkCompanyImportPage';
 import { OwnerCompanyDetailPage } from './pages/owner/OwnerCompanyDetailPage';
 import { OwnerQrPage } from './pages/owner/OwnerQrPage';
 import { OwnerLeadsPage } from './pages/owner/OwnerLeadsPage';
@@ -279,6 +280,16 @@ export default function App() {
             }
           />
           <Route
+            path="/mastermind/companies/import"
+            element={
+              <ProtectedRoute allowedRoles={['OWNER']}>
+                <DashboardLayout>
+                  <BulkCompanyImportPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/mastermind/companies/:id"
             element={
               <ProtectedRoute allowedRoles={['OWNER']}>
@@ -516,6 +527,16 @@ export default function App() {
               <ProtectedRoute allowedRoles={['OWNER']}>
                 <DashboardLayout>
                   <OwnerCompaniesPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/owner/companies/import"
+            element={
+              <ProtectedRoute allowedRoles={['OWNER']}>
+                <DashboardLayout>
+                  <BulkCompanyImportPage />
                 </DashboardLayout>
               </ProtectedRoute>
             }
