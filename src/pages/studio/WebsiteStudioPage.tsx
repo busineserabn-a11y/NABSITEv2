@@ -374,6 +374,22 @@ export const WebsiteStudioPage: React.FC = () => {
     }
   };
 
+  const handleRegenerateCategoryDesign = async (categoryName: string) => {
+    if (!company) return;
+    try {
+      const updatedWeb = await api.regenerateWebsiteDesign(company.id, categoryName);
+      setWebsite(updatedWeb);
+      if (updatedWeb.draftConfig) {
+        setConfig(updatedWeb.draftConfig);
+      }
+      setHasUnsavedChanges(false);
+      showToast(`Regenerated ${categoryName} design architecture & bespoke sections!`, 'success');
+    } catch (err: any) {
+      console.error(err);
+      showToast('Failed to regenerate category design', 'error');
+    }
+  };
+
   // Page Operations
   const handleAddPage = ({ name, slug, title, template }: { name: string; slug: string; title: string; template: string }) => {
     let initialSections: SectionConfig[] = [];
@@ -895,8 +911,10 @@ export const WebsiteStudioPage: React.FC = () => {
 
           {activeTab === 'settings' && (
             <StudioSettingsPanel
+              company={company}
               seo={config.seo}
               customHtml={config.customHtml}
+              onRegenerateCategoryDesign={handleRegenerateCategoryDesign}
               onUpdateSeo={(s) => handleUpdateConfig({ ...config, seo: { ...config.seo, ...s } })}
               onUpdateCustomHtml={(c) =>
                 handleUpdateConfig({

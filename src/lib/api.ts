@@ -37,6 +37,7 @@ import {
 import { INITIAL_CATEGORIES, INITIAL_SETTINGS, INITIAL_COMPANIES, INITIAL_WEBSITES, INITIAL_ANNOUNCEMENTS } from '../data/seed';
 import { THEME_REGISTRY } from '../data/themes';
 import { FEATURE_REGISTRY } from '../data/features';
+import { getCategoryDesignProfile, generateWebsiteConfigForCategory } from '../data/categoryProfiles';
 import { withTimeout, logAudit, logError } from './firestoreUtils';
 import { CANONICAL_BASE_URL, buildPublicUrl, buildQrDestinationUrl } from './urls';
 
@@ -441,152 +442,21 @@ export const api = {
       updatedAt: nowIso,
     };
 
+    const categoryProfile = getCategoryDesignProfile(newCompany.category);
+    const categoryWebsiteConfig = generateWebsiteConfigForCategory(newCompany, newCompany.category);
+
     const newWebsite: Website = {
       id: webId,
       companyId: compId,
-      themeId: 'theme_restaurant_classic',
+      themeId: categoryProfile.recommendedThemes[0] || 'tpl_rest_signature',
       status: 'draft',
       draftConfig: {
-        design: {
-          primaryColor: '#B91C1C',
-          secondaryColor: '#7F1D1D',
-          accentColor: '#F97316',
-          bgColor: '#FFFBEB',
-          surfaceColor: '#FFFFFF',
-          textColor: '#451A03',
-          mutedTextColor: '#78716C',
-          headingFont: 'Playfair Display',
-          bodyFont: 'Plus Jakarta Sans',
-          spacingDensity: 'comfortable',
-        },
-        header: {
-          showLogo: true,
-          showCompanyName: true,
-          style: 'standard',
-          sticky: true,
-          showPhoneBtn: true,
-          showTelegramBtn: true,
-          showCtaBtn: true,
-        },
-        footer: {
-          showLogo: true,
-          showDescription: true,
-          showContactInfo: true,
-          showSocialLinks: true,
-          showNavigation: true,
-          showDeveloperCredit: true,
-        },
-        navigation: [
-          { id: 'nav_home', label: 'Home', type: 'page', target: 'home', order: 1 },
-          { id: 'nav_menu', label: 'Menu & Offerings', type: 'page', target: 'menu', order: 2 },
-          { id: 'nav_about', label: 'About Us', type: 'page', target: 'about', order: 3 },
-          { id: 'nav_contact', label: 'Contact', type: 'page', target: 'contact', order: 4 },
-        ],
-        pages: [
-          {
-            id: 'page_home',
-            name: 'Home',
-            title: 'Home',
-            slug: 'home',
-            isHome: true,
-            isPublished: true,
-            showInNavigation: true,
-            sections: [
-              {
-                id: 'sec_hero',
-                type: 'hero',
-                title: newCompany.name,
-                subtitle: newCompany.shortDescription,
-                isVisible: true,
-                order: 1,
-              },
-              {
-                id: 'sec_featured',
-                type: 'products',
-                title: 'Featured Selection',
-                subtitle: 'Handcrafted quality and signature favorites',
-                isVisible: true,
-                order: 2,
-              },
-              {
-                id: 'sec_hours',
-                type: 'hours',
-                title: 'Business Hours & Location',
-                subtitle: 'Visit our establishment in Addis Ababa',
-                isVisible: true,
-                order: 3,
-              },
-            ],
-          },
-          {
-            id: 'page_menu',
-            name: 'Menu & Offerings',
-            title: 'Digital Menu & Offerings',
-            slug: 'menu',
-            isPublished: true,
-            showInNavigation: true,
-            sections: [
-              {
-                id: 'sec_menu_hero',
-                type: 'hero',
-                title: 'Full Menu & Catalog',
-                subtitle: 'Discover our comprehensive range of products and services',
-                isVisible: true,
-                order: 1,
-              },
-              {
-                id: 'sec_menu_items',
-                type: 'products',
-                title: 'All Offerings',
-                subtitle: 'Freshly prepared and curated daily',
-                isVisible: true,
-                order: 2,
-              },
-            ],
-          },
-          {
-            id: 'page_about',
-            name: 'About Us',
-            title: 'About Our Business',
-            slug: 'about',
-            isPublished: true,
-            showInNavigation: true,
-            sections: [
-              {
-                id: 'sec_about_story',
-                type: 'about',
-                title: 'Our Heritage & Mission',
-                subtitle: `Learn more about ${newCompany.name}`,
-                content: newCompany.shortDescription,
-                isVisible: true,
-                order: 1,
-              },
-            ],
-          },
-          {
-            id: 'page_contact',
-            name: 'Contact',
-            title: 'Contact & Inquiries',
-            slug: 'contact',
-            isPublished: true,
-            showInNavigation: true,
-            sections: [
-              {
-                id: 'sec_contact_info',
-                type: 'contact',
-                title: 'Get in Touch',
-                subtitle: 'Call, message on Telegram, or visit us in person',
-                isVisible: true,
-                order: 1,
-              },
-            ],
-          },
-        ],
-        installedFeatures: ['feature_digital_menu', 'feature_qr_generator'],
+        ...categoryWebsiteConfig,
+        installedFeatures: categoryProfile.businessFeatures.map((f, i) => `feature_cat_${i + 1}`),
         seo: {
-          siteTitle: newCompany.name,
-          metaDescription: newCompany.shortDescription,
-          keywords: [newCompany.name, newCompany.category, 'Ethiopia'],
+          siteTitle: `${newCompany.name} | Official Website`,
+          metaDescription: newCompany.shortDescription || categoryProfile.tagline,
+          keywords: [newCompany.name, newCompany.category, 'Addis Ababa', 'Ethiopia'],
         },
       },
       publishedConfig: null,
@@ -884,53 +754,33 @@ export const api = {
       },
     ];
 
+    const companyCategory = parentCompany?.category || 'Restaurant';
+    const categoryProfile = getCategoryDesignProfile(companyCategory);
+    const generatedConfig = parentCompany
+      ? generateWebsiteConfigForCategory(parentCompany, companyCategory, data.themeId)
+      : null;
+
     const newWebsite: Website = {
       id: webId,
       companyId: data.companyId,
-      themeId: data.themeId || 'theme_restaurant_classic',
+      themeId: data.themeId || categoryProfile.recommendedThemes[0] || 'theme_restaurant_classic',
       status: data.status || 'draft',
-      draftConfig: data.draftConfig || {
-        design: {
-          primaryColor: '#B91C1C',
-          secondaryColor: '#7F1D1D',
-          accentColor: '#F97316',
-          bgColor: '#FFFBEB',
-          surfaceColor: '#FFFFFF',
-          textColor: '#451A03',
-          mutedTextColor: '#78716C',
-          headingFont: 'Playfair Display',
-          bodyFont: 'Plus Jakarta Sans',
-          spacingDensity: 'comfortable',
-        },
-        header: {
-          showLogo: true,
-          showCompanyName: true,
-          style: 'standard',
-          sticky: true,
-          showPhoneBtn: true,
-          showTelegramBtn: true,
-          showCtaBtn: true,
-        },
-        footer: {
-          showLogo: true,
-          showDescription: true,
-          showContactInfo: true,
-          showSocialLinks: true,
-          showNavigation: true,
-          showDeveloperCredit: true,
-        },
-        navigation: [
-          { id: 'nav_home', label: 'Home', type: 'page', target: 'home', order: 1 },
-          { id: 'nav_menu', label: 'Menu & Offerings', type: 'page', target: 'menu', order: 2 },
-          { id: 'nav_about', label: 'About Us', type: 'page', target: 'about', order: 3 },
-          { id: 'nav_contact', label: 'Contact', type: 'page', target: 'contact', order: 4 },
-        ],
-        pages: defaultPages,
-        installedFeatures: ['feature_digital_menu', 'feature_qr_generator'],
+      draftConfig: data.draftConfig || generatedConfig || {
+        ...generateWebsiteConfigForCategory(
+          {
+            id: data.companyId,
+            name: 'Verified Business',
+            shortDescription: 'Certified partner on NABSITE',
+            category: companyCategory,
+          } as any,
+          companyCategory,
+          data.themeId
+        ),
+        installedFeatures: categoryProfile.businessFeatures.map((f, i) => `feature_cat_${i + 1}`),
         seo: {
           siteTitle: parentCompany?.name || 'Verified Website',
-          metaDescription: parentCompany?.shortDescription || 'Official verified storefront on NABSITE.',
-          keywords: [parentCompany?.name || 'Business', parentCompany?.category || 'Ethiopia', 'NABSITE'],
+          metaDescription: parentCompany?.shortDescription || categoryProfile.tagline,
+          keywords: [parentCompany?.name || 'Business', companyCategory, 'Ethiopia', 'NABSITE'],
         },
       },
       publishedConfig: null,
@@ -1199,6 +1049,78 @@ export const api = {
       const code = err.code || 'UNKNOWN';
       const msg = err.message || String(err);
       throw new ApiError(500, `[Firestore Error on unpublishWebsite (${code})]: ${msg}`);
+    }
+  },
+
+  regenerateWebsiteDesign: async (
+    companyId: string,
+    categoryName?: string,
+    templateId?: string
+  ): Promise<Website> => {
+    try {
+      const company = await api.getCompany(companyId);
+      const targetCategory = categoryName || company.category;
+      const profile = getCategoryDesignProfile(targetCategory);
+      const targetThemeId = templateId || profile.recommendedThemes[0];
+      const regeneratedConfig = generateWebsiteConfigForCategory(company, targetCategory, targetThemeId);
+
+      const targetWebId = company.websiteId || `web_${company.id}`;
+      const nowIso = new Date().toISOString();
+
+      const websiteDocRef = doc(firestoreDb, 'websites', targetWebId);
+      const existingSnap = await getDoc(websiteDocRef);
+      let currentWebsite = existingSnap.exists() ? (existingSnap.data() as Website) : null;
+
+      if (!currentWebsite) {
+        // Look up by companyId query
+        const q = query(collection(firestoreDb, 'websites'), where('companyId', '==', company.id), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          currentWebsite = { id: snap.docs[0].id, ...snap.docs[0].data() } as Website;
+        }
+      }
+
+      const updatedWebsite: Website = {
+        id: currentWebsite?.id || targetWebId,
+        companyId: company.id,
+        themeId: targetThemeId,
+        status: currentWebsite?.status || 'draft',
+        draftConfig: {
+          ...regeneratedConfig,
+          installedFeatures: profile.businessFeatures.map((f, i) => `feature_cat_${i + 1}`),
+          seo: {
+            siteTitle: `${company.name} | Official Website`,
+            metaDescription: company.shortDescription || profile.tagline,
+            keywords: [company.name, targetCategory, 'Addis Ababa', 'Ethiopia'],
+          },
+        },
+        publishedConfig: currentWebsite?.publishedConfig || null,
+        version: (currentWebsite?.version || 1) + 1,
+        createdAt: currentWebsite?.createdAt || nowIso,
+        updatedAt: nowIso,
+      };
+
+      await setDoc(doc(firestoreDb, 'websites', updatedWebsite.id), updatedWebsite, { merge: true });
+
+      // Update company category if it changed
+      if (categoryName && categoryName !== company.category) {
+        await updateDoc(doc(firestoreDb, 'companies', company.id), {
+          category: categoryName,
+          updatedAt: nowIso,
+        });
+      }
+
+      await logAudit(
+        'UPDATE',
+        'WEBSITE',
+        updatedWebsite.id,
+        `Regenerated category design profile for ${targetCategory}`
+      );
+
+      return updatedWebsite;
+    } catch (err: any) {
+      logError('regenerateWebsiteDesign', err, { companyId, categoryName, templateId });
+      throw new ApiError(500, `Failed to regenerate website design: ${err.message || err}`);
     }
   },
 

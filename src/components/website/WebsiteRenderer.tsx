@@ -64,6 +64,7 @@ import { api } from '../../lib/api';
 import { CompanyName } from '../ui/CompanyName';
 import { MenuItemDetailModal } from './MenuItemDetailModal';
 import { DigitalMenuRenderer } from './DigitalMenuRenderer';
+import { CategorySectionDispatcher } from './CategorySections';
 
 export interface WebsiteRendererProps {
   company: Company;
@@ -2019,8 +2020,51 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
         </header>
       )}
 
-      {/* RENDER BODY ACCORDING TO ACTIVE PAGE */}
-      {isPageAbout ? (
+      {/* DYNAMIC SECTION RENDERING OR FALLBACK ROUTER */}
+      {activePage?.sections && activePage.sections.length > 0 ? (
+        <main className="space-y-12">
+          {activePage.sections
+            .filter((sec) => sec.isVisible !== false)
+            .sort((a, b) => (a.order || 0) - (b.order || 0))
+            .map((sec) => {
+              switch (sec.type) {
+                case 'hero':
+                  return renderSectionContainer(sec.id, renderHeroSection());
+                case 'products':
+                case 'store':
+                  return renderSectionContainer(sec.id, renderProductsSection());
+                case 'about':
+                  return renderSectionContainer(sec.id, renderAboutSection());
+                case 'contact':
+                  return renderSectionContainer(sec.id, renderContactSection());
+                case 'hours':
+                  return renderSectionContainer(sec.id, renderScheduleLocationSection());
+                case 'reviews':
+                  return renderSectionContainer(sec.id, renderReviewsSection());
+                case 'announcements':
+                  return renderSectionContainer(sec.id, renderAnnouncementsSection());
+                case 'promos':
+                  return renderSectionContainer(sec.id, renderPromosBanner());
+                case 'faq':
+                  return renderSectionContainer(sec.id, renderFaqSection());
+                case 'custom_html':
+                  return renderSectionContainer(sec.id, renderCustomHtmlSection());
+                default:
+                  return renderSectionContainer(
+                    sec.id,
+                    <CategorySectionDispatcher
+                      company={company}
+                      config={config}
+                      section={sec}
+                      onActionClick={(action, target) => {
+                        if (target && onNavigatePage) onNavigatePage(target);
+                      }}
+                    />
+                  );
+              }
+            })}
+        </main>
+      ) : isPageAbout ? (
         <div className="space-y-12">
           {renderAboutPage()}
           {renderSectionContainer('contact', renderContactSection())}

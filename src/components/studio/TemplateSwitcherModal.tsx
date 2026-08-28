@@ -31,6 +31,7 @@ import {
   Announcement,
 } from '../../types';
 import { THEME_REGISTRY, BUSINESS_CATEGORIES, TEMPLATES_BY_CATEGORY } from '../../data/themes';
+import { generateWebsiteConfigForCategory, getCategoryDesignProfile } from '../../data/categoryProfiles';
 import { WebsiteRenderer } from '../website/WebsiteRenderer';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -72,6 +73,7 @@ export const TemplateSwitcherModal: React.FC<TemplateSwitcherModalProps> = ({
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [previewViewport, setPreviewViewport] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
+  const [applyCategoryArchitecture, setApplyCategoryArchitecture] = useState(true);
   const [isApplying, setIsApplying] = useState(false);
 
   if (!isOpen) return null;
@@ -153,25 +155,33 @@ export const TemplateSwitcherModal: React.FC<TemplateSwitcherModalProps> = ({
   const handleConfirmApply = () => {
     setIsApplying(true);
     try {
-      // Build updated config with new theme design palette & fonts while preserving all content
-      const newPalette = selectedTheme.defaultPalette;
-      const newTypography = selectedTheme.typography;
+      let updatedConfig: WebsiteConfig;
 
-      const updatedConfig: WebsiteConfig = {
-        ...config,
-        design: {
-          ...config.design,
-          primaryColor: newPalette.primary,
-          secondaryColor: newPalette.secondary,
-          accentColor: newPalette.accent,
-          bgColor: newPalette.bg,
-          surfaceColor: newPalette.surface,
-          textColor: newPalette.text,
-          mutedTextColor: newPalette.muted,
-          headingFont: newTypography.headingFont,
-          bodyFont: newTypography.bodyFont,
-        },
-      };
+      if (applyCategoryArchitecture) {
+        // Regenerate complete category-tailored pages, bespoke sections, and design profile
+        const targetCategory = selectedTheme.category || company.category || 'Restaurant';
+        updatedConfig = generateWebsiteConfigForCategory(company, targetCategory, selectedTheme.id);
+      } else {
+        // Build updated config with new theme design palette & fonts while preserving all content
+        const newPalette = selectedTheme.defaultPalette;
+        const newTypography = selectedTheme.typography;
+
+        updatedConfig = {
+          ...config,
+          design: {
+            ...config.design,
+            primaryColor: newPalette.primary,
+            secondaryColor: newPalette.secondary,
+            accentColor: newPalette.accent,
+            bgColor: newPalette.bg,
+            surfaceColor: newPalette.surface,
+            textColor: newPalette.text,
+            mutedTextColor: newPalette.muted,
+            headingFont: newTypography.headingFont,
+            bodyFont: newTypography.bodyFont,
+          },
+        };
+      }
 
       onApplyTemplate(selectedTheme.id, updatedConfig);
       onClose();
@@ -575,20 +585,32 @@ export const TemplateSwitcherModal: React.FC<TemplateSwitcherModalProps> = ({
         </div>
 
         {/* Safe Data Preservation Footer & Apply Action */}
-        <div className="p-4 sm:p-5 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-3">
-            <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
-            <div className="text-left">
-              <p className="text-xs font-bold text-slate-200">
-                100% Data Preservation Guarantee
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Switching to <span className="text-amber-400 font-bold">{selectedTheme.name}</span> will update your layout and styling. Products, reviews, menu items, and pages remain untouched.
-              </p>
+        <div className="p-4 sm:p-5 bg-slate-950 border-t border-slate-800 flex flex-col lg:flex-row items-center justify-between gap-4 shrink-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+              <div className="text-left">
+                <p className="text-xs font-bold text-slate-200">
+                  100% Data Preservation Guarantee
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Switching to <span className="text-amber-400 font-bold">{selectedTheme.name}</span> preserves all your products, menu items, prices, and reviews.
+                </p>
+              </div>
             </div>
+
+            <label className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 hover:text-white cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={applyCategoryArchitecture}
+                onChange={(e) => setApplyCategoryArchitecture(e.target.checked)}
+                className="w-3.5 h-3.5 accent-amber-500 rounded cursor-pointer"
+              />
+              <span>Generate Category-Tailored Sections & Pages</span>
+            </label>
           </div>
 
-          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-2.5 w-full lg:w-auto justify-end">
             <Button variant="outline" size="sm" onClick={onClose} disabled={isApplying}>
               Cancel
             </Button>

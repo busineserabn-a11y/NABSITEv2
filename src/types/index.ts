@@ -155,7 +155,68 @@ export type SectionType =
   | 'telegram_cta'
   | 'custom_html'
   | 'divider'
-  | 'rich_text';
+  | 'rich_text'
+  | 'store'
+  | 'promos'
+  // Education & School
+  | 'programs'
+  | 'academic_programs'
+  | 'faculty'
+  | 'campus_tour'
+  | 'campus_life'
+  | 'admissions'
+  | 'principal_message'
+  | 'events'
+  | 'achievements'
+  // Hotel & Hospitality
+  | 'rooms'
+  | 'amenities'
+  | 'hotel_amenities'
+  | 'dining'
+  | 'booking_cta'
+  | 'reservation'
+  // Café & Specialty Coffee
+  | 'specialty_brews'
+  | 'bean_origins'
+  | 'coffee_origin'
+  | 'cozy_spaces'
+  | 'cafe_vibe'
+  | 'curated_menu'
+  | 'pastry_showcase'
+  // Clinic & Healthcare
+  | 'medical_services'
+  | 'doctors'
+  | 'doctors_directory'
+  | 'appointment_booking'
+  | 'emergency_notice'
+  | 'departments'
+  // Salon & Beauty
+  | 'treatments'
+  | 'beauty_treatments'
+  | 'stylists'
+  | 'stylist_directory'
+  | 'pricing_tiers'
+  | 'price_list'
+  | 'beauty_gallery'
+  | 'before_after'
+  // Fitness & Gym
+  | 'workout_programs'
+  | 'fitness_classes'
+  | 'trainers'
+  | 'membership_tiers'
+  | 'membership_plans'
+  | 'class_schedule'
+  // Real Estate & Construction & Auto & Food
+  | 'property_listings'
+  | 'agent_roster'
+  | 'project_portfolio'
+  | 'capabilities'
+  | 'vehicle_inventory'
+  | 'test_drive_cta'
+  | 'chef_story'
+  | 'chef_signature'
+  | 'signature_dishes'
+  | 'table_reservation';
 
 export interface CtaConfig {
   text: string;
@@ -743,3 +804,65 @@ export interface MediaAsset {
   category: 'logos' | 'hero' | 'gallery' | 'products' | 'announcements' | 'offers' | 'general';
   createdAt: string;
 }
+
+export interface CategoryDesignProfile {
+  categoryId: string;
+  categoryName: string;
+  categorySlug: string;
+  iconName: string;
+  description: string;
+  visualPersonality: string;
+  tagline: string;
+  recommendedThemes: string[];
+  defaultPalette: {
+    primary: string;
+    secondary: string;
+    accent: string;
+    bg: string;
+    surface: string;
+    text: string;
+    muted: string;
+  };
+  typography: {
+    headingFont: string;
+    bodyFont: string;
+    scaleRatio: number;
+    headingWeight: string;
+  };
+  heroDefaults: {
+    badge: string;
+    title: string;
+    subtitle: string;
+    ctaPrimary: { text: string; action: string };
+    ctaSecondary?: { text: string; action: string };
+    layout: 'split' | 'fullscreen' | 'centered' | 'editorial' | 'minimal';
+  };
+  defaultNavigation: Array<{
+    id: string;
+    label: string;
+    target: string;
+    type: 'page' | 'anchor' | 'external' | 'custom_url';
+    order: number;
+  }>;
+  defaultPages: PageConfig[];
+  recommendedPages: string[];
+  optionalPages: string[];
+  excludedPages: string[];
+  sectionCatalog: Array<{
+    type: SectionType;
+    name: string;
+    icon: string;
+    desc: string;
+    categorySpecific: boolean;
+    defaultTitle: string;
+    defaultSubtitle?: string;
+    defaultData?: any;
+  }>;
+  businessFeatures: string[];
+  mobileLayoutSettings: {
+    primaryAction: 'call' | 'telegram' | 'book' | 'order' | 'quote' | 'directions' | 'menu';
+    bottomBarItems: Array<{ icon: string; label: string; action: string; target?: string }>;
+    cardDisplayMode: 'grid' | 'carousel' | 'list';
+  };
+}
+
