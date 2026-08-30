@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { SubModuleImportModal, SubModuleType } from '../../components/company/SubModuleImportModal';
+import { DuplicateWebsiteModal } from '../../components/company/DuplicateWebsiteModal';
 import {
   Company,
   Website,
@@ -89,6 +90,7 @@ export const OwnerCompanyDetailPage: React.FC = () => {
     type: SubModuleType;
   }>({ isOpen: false, type: 'menu' });
   const [importMenuDropdownOpen, setImportMenuDropdownOpen] = useState(false);
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<
     'overview' | 'info' | 'website' | 'features' | 'themes' | 'subadmins' | 'analytics' | 'audit' | 'qr'
@@ -595,6 +597,16 @@ export const OwnerCompanyDetailPage: React.FC = () => {
             </Button>
           </Link>
 
+          <Button
+            size="sm"
+            variant="outline"
+            icon={Copy}
+            onClick={() => setDuplicateModalOpen(true)}
+            className="text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700/60 hover:bg-amber-500/10 font-bold"
+          >
+            Duplicate Website
+          </Button>
+
           {website?.status === 'published' ? (
             <Button size="sm" variant="outline" icon={Power} onClick={handleUnpublishWebsite} disabled={actionLoading}>
               Unpublish
@@ -782,6 +794,9 @@ export const OwnerCompanyDetailPage: React.FC = () => {
                     Launch Setup Wizard
                   </Button>
                 </Link>
+                <Button variant="outline" size="sm" icon={Copy} className="w-full justify-start text-amber-600 dark:text-amber-400 font-bold" onClick={() => setDuplicateModalOpen(true)}>
+                  Duplicate Website & Company
+                </Button>
                 <Button variant="outline" size="sm" icon={QrCode} className="w-full justify-start" onClick={() => setActiveTab('qr')}>
                   Generate Custom QR Code
                 </Button>
@@ -1566,6 +1581,21 @@ Login URL: ${window.location.origin}/login
           onSuccess={() => {
             fetchData();
             showNotification(`Bulk ingestion for ${subImportModal.type} completed successfully.`);
+          }}
+        />
+      )}
+
+      {/* Duplicate Website Modal */}
+      {company && duplicateModalOpen && (
+        <DuplicateWebsiteModal
+          isOpen={duplicateModalOpen}
+          onClose={() => setDuplicateModalOpen(false)}
+          sourceCompany={company}
+          sourceWebsite={website}
+          onSuccess={(newComp) => {
+            fetchData();
+            showNotification(`Website duplicated successfully! New company "${newComp.name}" is now ready.`);
+            navigate(`/company/${newComp.id}`);
           }}
         />
       )}

@@ -34,6 +34,7 @@ interface StudioPagesSidebarProps {
   activePageSlug: string;
   onSelectPage: (slug: string) => void;
   onOpenPageSettings?: (slug: string) => void;
+  onOpenPageControl?: () => void;
   onAddPage: (page: { name: string; slug: string; title: string; template: string }) => void;
   onUpdatePage: (id: string, updates: Partial<WebsitePage>) => void;
   onDeletePage: (id: string) => void;
@@ -59,6 +60,7 @@ export const StudioPagesSidebar: React.FC<StudioPagesSidebarProps> = ({
   activePageSlug,
   onSelectPage,
   onOpenPageSettings,
+  onOpenPageControl,
   onAddPage,
   onUpdatePage,
   onDeletePage,
@@ -122,16 +124,28 @@ export const StudioPagesSidebar: React.FC<StudioPagesSidebarProps> = ({
       <div className="p-4 border-b border-slate-800 flex items-center justify-between">
         <div>
           <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Pages Manager</h3>
-          <p className="text-xs text-slate-500">{pages.length} pages in website</p>
+          <p className="text-xs text-slate-500">{pages.length} pages total</p>
         </div>
-        <button
-          type="button"
-          onClick={() => handleOpenAddModal('custom')}
-          className="p-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1 shadow-sm transition-transform active:scale-95"
-          title="Add New Page"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          {onOpenPageControl && (
+            <button
+              type="button"
+              onClick={onOpenPageControl}
+              className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold flex items-center gap-1 border border-slate-700 shadow-sm transition-colors"
+              title="Category Page Control & Enable/Disable"
+            >
+              <Sliders className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => handleOpenAddModal('custom')}
+            className="p-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1 shadow-sm transition-transform active:scale-95"
+            title="Add New Page"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Pages List */}
@@ -188,7 +202,7 @@ export const StudioPagesSidebar: React.FC<StudioPagesSidebarProps> = ({
                     </div>
                   ) : (
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className={`text-xs font-bold truncate ${isActive ? 'text-amber-300 font-extrabold' : 'text-white'}`}>
                           {page.name}
                         </span>
@@ -197,7 +211,12 @@ export const StudioPagesSidebar: React.FC<StudioPagesSidebarProps> = ({
                             HOME
                           </span>
                         )}
-                        {page.isHidden && (
+                        {(page.enabled === false || page.isPublished === false) && (
+                          <span className="text-[9px] font-bold bg-rose-950/80 border border-rose-800 text-rose-300 px-1 rounded">
+                            DISABLED
+                          </span>
+                        )}
+                        {page.isHidden && page.enabled !== false && (
                           <span className="text-[9px] font-bold bg-slate-700 text-slate-300 px-1 rounded">
                             HIDDEN
                           </span>

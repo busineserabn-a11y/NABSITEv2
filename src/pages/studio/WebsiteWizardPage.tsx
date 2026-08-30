@@ -25,6 +25,7 @@ import { api } from '../../lib/api';
 import { Company, ThemeDefinition } from '../../types';
 import { THEME_REGISTRY, BUSINESS_CATEGORIES, getTemplatesByCategory, getThemeById } from '../../data/themes';
 import { FEATURE_REGISTRY } from '../../data/features';
+import { getCategoryDesignProfile, generateWebsiteConfigForCategory } from '../../data/categoryProfiles';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Card } from '../../components/ui/Card';
@@ -50,6 +51,7 @@ export const WebsiteWizardPage: React.FC = () => {
   const [customHtmlCode, setCustomHtmlCode] = useState<string>('');
   const [customCssCode, setCustomCssCode] = useState<string>('');
   const [creating, setCreating] = useState(false);
+  const [selectedPageSlugs, setSelectedPageSlugs] = useState<string[]>(['home', 'about', 'menu', 'contact']);
 
   useEffect(() => {
     if (!id) return;
@@ -65,11 +67,22 @@ export const WebsiteWizardPage: React.FC = () => {
             setSelectedThemeId(categoryTemplates[0].id);
             setSelectedCategoryTab(comp.category || 'all');
           }
+          // Pre-populate recommended pages from category profile
+          const profile = getCategoryDesignProfile(comp.category);
+          const initialPages = profile.defaultPages.map((p) => p.slug);
+          setSelectedPageSlugs(initialPages);
         }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);
+
+  const togglePageSlug = (slug: string) => {
+    if (slug === 'home') return; // Home is always required
+    setSelectedPageSlugs((prev) =>
+      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]
+    );
+  };
 
   const toggleFeature = (featId: string) => {
     setSelectedFeatures((prev) =>
@@ -81,64 +94,26 @@ export const WebsiteWizardPage: React.FC = () => {
     if (!company) return;
     setCreating(true);
     try {
-      const selectedTheme = THEME_REGISTRY.find((t) => t.id === selectedThemeId) || THEME_REGISTRY[0];
-      const websitePayload = {
-        companyId: company.id,
-        themeId: method === 'theme' ? selectedThemeId : 'theme_minimal',
-        status: 'draft',
-        draftConfig: {
-          design: {
-            primaryColor: selectedTheme.defaultPalette.primary,
-            secondaryColor: selectedTheme.defaultPalette.secondary,
-            accentColor: selectedTheme.defaultPalette.accent,
-            bgColor: selectedTheme.defaultPalette.bg,
-            surfaceColor: selectedTheme.defaultPalette.surface,
-            textColor: selectedTheme.defaultPalette.text,
-            mutedTextColor: selectedTheme.defaultPalette.muted,
-            headingFont: selectedTheme.typography.headingFont,
-            bodyFont: selectedTheme.typography.bodyFont,
-            spacingDensity: 'comfortable',
-          },
-          header: {
-            showLogo: true,
-            showCompanyName: true,
-            style: 'standard',
-            sticky: true,
-            showPhoneBtn: selectedFeatures.includes('feature_call'),
-            showTelegramBtn: selectedFeatures.includes('feature_telegram'),
-            showCtaBtn: true,
-          },
-          footer: {
-            showLogo: true,
-            showDescription: true,
-            showContactInfo: true,
-            showSocialLinks: true,
-            showNavigation: true,
-            showDeveloperCredit: true,
-          },
-          pages: [
-            { id: 'page_home', name: 'Home', slug: 'home', title: 'Home', isHome: true, isPublished: true, isHidden: false, order: 1, sections: [] },
-            { id: 'page_store', name: 'Store', slug: 'store', title: 'Store Catalog', isHome: false, isPublished: selectedFeatures.includes('feature_store'), isHidden: false, order: 2, sections: [] },
-            { id: 'page_reviews', name: 'Reviews', slug: 'reviews', title: 'Guest Reviews', isHome: false, isPublished: selectedFeatures.includes('feature_reviews'), isHidden: false, order: 3, sections: [] },
-            { id: 'page_contact', name: 'Contact', slug: 'contact', title: 'Contact Us', isHome: false, isPublished: true, isHidden: false, order: 4, sections: [] },
-          ],
-          installedFeatures: selectedFeatures,
-          customHtml: method === 'custom_html' ? {
-            id: `html_${Date.now()}`,
-            websiteId: '',
-            companyId: company.id,
-            name: 'Custom Template',
-            html: customHtmlCode,
-            css: customCssCode,
-            js: '',
-            status: 'published',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          } : undefined,
-        },
-      };
+      const generatedConfig = generateWebsiteConfigForCategory(company, company.category, selectedThemeId, {
+        enabledPageSlugs: selectedPageSlugs,
+      });
 
-      await api.saveDraft(company.websiteId || company.id, websitePayload.draftConfig);
+      if (method === 'custom_html') {
+        generatedConfig.customHtml = {
+          id: `html_${Date.now()}`,
+          websiteId: '',
+          companyId: company.id,
+          name: 'Custom Template',
+          html: customHtmlCode,
+          css: customCssCode,
+          js: '',
+          status: 'published',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      await api.saveDraft(company.websiteId || company.id, generatedConfig, selectedThemeId);
       navigate(`/studio/${company.id}`);
     } catch (err) {
       console.error(err);
@@ -386,59 +361,161 @@ export const WebsiteWizardPage: React.FC = () => {
         </div>
       )}
 
-      {/* STEP 3: FEATURE CHECKLIST */}
+      {/* STEP 3: PAGES & FEATURES */}
       {step === 3 && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-              Configure Enabled Features & Sections
-            </h2>
-            <p className="text-xs text-slate-500">
-              Select what interactive modules to include on the public website.
-            </p>
-          </div>
+        <div className="space-y-8">
+          {/* 3A. Recommended Pages */}
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                  Category Recommended Pages
+                </h2>
+                <Badge variant="gold" size="sm">
+                  {company.category || 'Business'} Tailored
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Category pages are intelligent recommendations, not strict requirements. Select only the pages your business needs.
+              </p>
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              { id: 'feature_store', name: 'Product / Menu Catalog', desc: 'Display items with ETB pricing, photos, and order CTAs', icon: ShoppingBag },
-              { id: 'feature_reviews', name: 'Verified Customer Reviews', desc: 'Customer star ratings and live review submission modal', icon: Star },
-              { id: 'feature_offers', name: 'Promotions & Special Deals', desc: 'Discount banners with claim actions', icon: Tag },
-              { id: 'feature_hours', name: 'Business Schedule & Live Status', desc: 'Real-time open/closed indicator with daily hours', icon: Clock },
-              { id: 'feature_location', name: 'Location & Google Maps', desc: 'Physical premises address and navigation link', icon: MapPin },
-              { id: 'feature_call', name: 'Direct Phone Hotline', desc: '1-click tap to call company phone number', icon: Phone },
-              { id: 'feature_telegram', name: 'Telegram Channel / Support', desc: 'Direct message link to company Telegram', icon: Send },
-              { id: 'feature_faq', name: 'FAQ Accordion Block', desc: 'Interactive expandable frequently asked questions', icon: HelpCircle },
-            ].map((feat) => {
-              const isChecked = selectedFeatures.includes(feat.id);
-              const Icon = feat.icon;
+            {(() => {
+              const profile = getCategoryDesignProfile(company.category);
+              const defaultPageList = (profile.defaultPages || []).map((dp) => ({
+                slug: dp.slug,
+                name: dp.name || dp.title || dp.slug,
+                description: dp.description || `/${dp.slug} page`,
+                isDefault: true,
+              }));
+
+              const optionalPageList = (profile.optionalPages || [])
+                .filter((slug) => !defaultPageList.some((dp) => dp.slug === slug))
+                .map((slug) => ({
+                  slug,
+                  name: slug.charAt(0).toUpperCase() + slug.slice(1).replace(/-/g, ' '),
+                  description: `Optional /${slug} page for additional content`,
+                  isDefault: false,
+                }));
+
+              const allPossiblePages = [...defaultPageList, ...optionalPageList];
+
               return (
-                <div
-                  key={feat.id}
-                  onClick={() => toggleFeature(feat.id)}
-                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
-                    isChecked
-                      ? 'border-amber-500 bg-amber-500/10'
-                      : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 opacity-60'
-                  }`}
-                >
-                  <div className={`p-2 rounded-xl shrink-0 ${isChecked ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-900 dark:text-white">{feat.name}</span>
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {}}
-                        className="rounded text-amber-500"
-                      />
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-1">{feat.desc}</p>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {allPossiblePages.map((p) => {
+                    const isChecked = selectedPageSlugs.includes(p.slug);
+                    const isRequired = p.slug === 'home';
+                    const isRecommended = p.isDefault && !isRequired;
+
+                    return (
+                      <div
+                        key={p.slug}
+                        onClick={() => {
+                          if (!isRequired) togglePageSlug(p.slug);
+                        }}
+                        className={`p-3.5 rounded-2xl border-2 transition-all flex flex-col justify-between ${
+                          isRequired
+                            ? 'border-amber-500/60 bg-amber-500/5 cursor-default'
+                            : isChecked
+                            ? 'border-amber-500 bg-amber-500/10 cursor-pointer shadow-sm'
+                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/60 opacity-60 hover:opacity-100 cursor-pointer'
+                        }`}
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white">
+                              {p.name}
+                            </span>
+                            {isRequired ? (
+                              <span className="text-[9px] font-black uppercase bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded">
+                                REQUIRED
+                              </span>
+                            ) : isRecommended ? (
+                              <span className="text-[9px] font-bold uppercase bg-sky-500/20 text-sky-400 border border-sky-500/30 px-1.5 py-0.5 rounded">
+                                RECOMMENDED
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-bold uppercase bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
+                                OPTIONAL
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-500 leading-snug">
+                            {p.description}
+                          </p>
+                        </div>
+
+                        <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-700/50 mt-2">
+                          <span className="text-[10px] font-mono text-slate-400">/{p.slug}</span>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={isRequired}
+                            onChange={() => {}}
+                            className="rounded text-amber-500"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               );
-            })}
+            })()}
+          </div>
+
+          {/* 3B. Feature Checklist */}
+          <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                Interactive Modules & Features
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Enable customer interactions and service modules.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { id: 'feature_store', name: 'Product / Menu Catalog', desc: 'Display items with ETB pricing, photos, and order CTAs', icon: ShoppingBag },
+                { id: 'feature_reviews', name: 'Verified Customer Reviews', desc: 'Customer star ratings and live review submission modal', icon: Star },
+                { id: 'feature_offers', name: 'Promotions & Special Deals', desc: 'Discount banners with claim actions', icon: Tag },
+                { id: 'feature_hours', name: 'Business Schedule & Live Status', desc: 'Real-time open/closed indicator with daily hours', icon: Clock },
+                { id: 'feature_location', name: 'Location & Google Maps', desc: 'Physical premises address and navigation link', icon: MapPin },
+                { id: 'feature_call', name: 'Direct Phone Hotline', desc: '1-click tap to call company phone number', icon: Phone },
+                { id: 'feature_telegram', name: 'Telegram Channel / Support', desc: 'Direct message link to company Telegram', icon: Send },
+                { id: 'feature_faq', name: 'FAQ Accordion Block', desc: 'Interactive expandable frequently asked questions', icon: HelpCircle },
+              ].map((feat) => {
+                const isChecked = selectedFeatures.includes(feat.id);
+                const Icon = feat.icon;
+                return (
+                  <div
+                    key={feat.id}
+                    onClick={() => toggleFeature(feat.id)}
+                    className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                      isChecked
+                        ? 'border-amber-500 bg-amber-500/10'
+                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 opacity-60'
+                    }`}
+                  >
+                    <div className={`p-2 rounded-xl shrink-0 ${isChecked ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-slate-900 dark:text-white">{feat.name}</span>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}}
+                          className="rounded text-amber-500"
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5 truncate">{feat.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex items-center justify-between pt-4">
@@ -478,14 +555,32 @@ export const WebsiteWizardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 dark:border-slate-700 text-xs">
+            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-200 dark:border-slate-700 text-xs">
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Selected Theme</span>
                 <span className="font-bold text-slate-800 dark:text-white">{selectedTheme.name}</span>
               </div>
               <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Active Pages</span>
+                <span className="font-bold text-slate-800 dark:text-white">{selectedPageSlugs.length} Pages Configured</span>
+              </div>
+              <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Active Features</span>
                 <span className="font-bold text-slate-800 dark:text-white">{selectedFeatures.length} Modules Enabled</span>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <span className="text-slate-400 block text-[10px] uppercase font-bold mb-1.5">Initial Page Routes:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {selectedPageSlugs.map((slug) => (
+                  <span
+                    key={slug}
+                    className="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-750 text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300"
+                  >
+                    /{slug}
+                  </span>
+                ))}
               </div>
             </div>
           </div>

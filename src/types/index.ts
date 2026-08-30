@@ -274,6 +274,8 @@ export interface PageSeo {
   ogImage?: string;
 }
 
+export type PageRequirementType = 'required' | 'recommended' | 'optional' | 'custom';
+
 export interface PageConfig {
   id: string;
   name?: string;
@@ -283,9 +285,12 @@ export interface PageConfig {
   order?: number;
   isHome?: boolean;
   isPublished?: boolean;
+  enabled?: boolean;
+  requirementType?: PageRequirementType;
+  categorySource?: string;
   isHidden?: boolean;
   showInNavigation?: boolean;
-  template?: 'standard' | 'landing' | 'contained' | 'fluid';
+  template?: 'standard' | 'landing' | 'contained' | 'fluid' | string;
   customBgColor?: string;
   customPattern?: string;
   metaTitle?: string;
@@ -561,6 +566,7 @@ export interface Announcement {
   title: string;
   content: string;
   image?: string;
+  imageUrl?: string;
   status?: AnnouncementStatus;
   publishDate?: string;
   ctaText?: string;
@@ -576,6 +582,22 @@ export interface Announcement {
   attachmentUrl?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DuplicateWebsiteOptions {
+  sourceCompanyId: string;
+  newCompanyName: string;
+  newCompanySlug: string;
+  copyMenuContent: boolean;
+  copyAnnouncements?: boolean;
+  copyOffers?: boolean;
+}
+
+export interface DuplicationResult {
+  company: Company;
+  website: Website;
+  duplicatedProductsCount?: number;
+  duplicatedCategoriesCount?: number;
 }
 
 export interface Lead {

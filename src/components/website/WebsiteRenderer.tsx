@@ -1475,10 +1475,10 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 </div>
               </div>
 
-              {featuredAnn.image && (
+              {(featuredAnn.imageUrl || featuredAnn.image) && (
                 <div className="lg:col-span-4">
                   <img
-                    src={featuredAnn.image}
+                    src={featuredAnn.imageUrl || featuredAnn.image}
                     alt={featuredAnn.title}
                     className="w-full h-44 rounded-2xl object-cover border border-slate-700 shadow-md"
                     referrerPolicy="no-referrer"
@@ -1680,9 +1680,9 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                     </span>
                   </div>
 
-                  {ann.image && (
+                  {(ann.imageUrl || ann.image) && (
                     <img
-                      src={ann.image}
+                      src={ann.imageUrl || ann.image}
                       alt={ann.title}
                       className="w-full h-48 rounded-2xl object-cover border border-slate-100 dark:border-slate-700"
                       referrerPolicy="no-referrer"
@@ -2301,9 +2301,9 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
       >
         {selectedAnnouncement && (
           <div className="space-y-4">
-            {selectedAnnouncement.image && (
+            {(selectedAnnouncement.imageUrl || selectedAnnouncement.image) && (
               <img
-                src={selectedAnnouncement.image}
+                src={selectedAnnouncement.imageUrl || selectedAnnouncement.image}
                 alt={selectedAnnouncement.title}
                 className="w-full h-56 rounded-2xl object-cover border border-slate-200 dark:border-slate-700"
                 referrerPolicy="no-referrer"

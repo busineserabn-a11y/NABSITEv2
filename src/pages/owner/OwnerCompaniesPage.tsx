@@ -34,8 +34,10 @@ import {
   Tag,
   ArrowRight,
   Info,
+  Copy,
 } from 'lucide-react';
 import { api, generateSlug } from '../../lib/api';
+import { DuplicateWebsiteModal } from '../../components/company/DuplicateWebsiteModal';
 import { Company, Category, User } from '../../types';
 import { BUSINESS_CATEGORIES, getTemplatesByCategory } from '../../data/themes';
 import { FEATURE_REGISTRY } from '../../data/features';
@@ -60,6 +62,9 @@ export const OwnerCompaniesPage: React.FC = () => {
   // Add Company Dropdown State
   const [addDropdownOpen, setAddDropdownOpen] = useState(false);
   const addDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Duplicate Website Modal State
+  const [duplicateTargetCompany, setDuplicateTargetCompany] = useState<Company | null>(null);
 
   // Create One Company Modal State
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -580,6 +585,15 @@ export const OwnerCompaniesPage: React.FC = () => {
                   </Button>
                 </Link>
 
+                <button
+                  type="button"
+                  onClick={() => setDuplicateTargetCompany(c)}
+                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-amber-500 hover:border-amber-500/50 hover:bg-amber-500/10 text-[11px] font-bold transition-colors flex items-center gap-1"
+                  title="Duplicate Website & Company"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+
                 {c.status === 'active' ? (
                   <button
                     onClick={() =>
@@ -1070,6 +1084,19 @@ export const OwnerCompaniesPage: React.FC = () => {
           </Button>
         </div>
       </Modal>
+
+      {/* Duplicate Website Modal */}
+      {duplicateTargetCompany && (
+        <DuplicateWebsiteModal
+          isOpen={!!duplicateTargetCompany}
+          onClose={() => setDuplicateTargetCompany(null)}
+          sourceCompany={duplicateTargetCompany}
+          onSuccess={(newCompany) => {
+            fetchData();
+            navigate(`/company/${newCompany.id}`);
+          }}
+        />
+      )}
     </div>
   );
 };

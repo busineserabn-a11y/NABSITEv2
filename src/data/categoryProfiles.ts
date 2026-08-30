@@ -2106,7 +2106,11 @@ export function getCategoryDesignProfile(categoryName?: string): CategoryDesignP
 export function generateWebsiteConfigForCategory(
   company: Company,
   categoryName?: string,
-  templateId?: string
+  templateId?: string,
+  options?: {
+    enabledPageSlugs?: string[];
+    customPages?: PageConfig[];
+  }
 ): WebsiteConfig {
   const profile = getCategoryDesignProfile(categoryName || company.category);
   const matchedTheme: ThemeDefinition | undefined = templateId
@@ -2117,36 +2121,74 @@ export function generateWebsiteConfigForCategory(
   const themeTypography = matchedTheme?.typography || profile.typography;
 
   // Clone profile default pages and personalize titles/names with company details
-  const customizedPages: PageConfig[] = profile.defaultPages.map((p, pIndex) => ({
-    ...p,
-    id: `page_${p.slug}`,
-    order: pIndex + 1,
-    sections: p.sections.map((sec, sIndex) => {
-      let customTitle = sec.title;
-      let customSubtitle = sec.subtitle;
+  const customizedPages: PageConfig[] = profile.defaultPages.map((p, pIndex) => {
+    const isHome = !!p.isHome || p.slug === 'home';
+    const requirementType = isHome
+      ? 'required'
+      : profile.recommendedPages?.includes(p.slug)
+      ? 'recommended'
+      : profile.optionalPages?.includes(p.slug)
+      ? 'optional'
+      : 'recommended';
 
-      if (sec.type === 'hero' && p.isHome) {
-        customTitle = company.name || profile.heroDefaults.title;
-        customSubtitle = company.shortDescription || profile.heroDefaults.subtitle;
-      }
+    // If enabledPageSlugs is provided, respect user selection (home is always enabled)
+    const isEnabled = isHome || !options?.enabledPageSlugs || options.enabledPageSlugs.includes(p.slug);
 
-      return {
-        ...sec,
-        id: `sec_${sec.type}_${p.slug}_${sIndex + 1}`,
-        title: customTitle,
-        subtitle: customSubtitle,
-        order: sIndex + 1,
-      };
-    }),
-  }));
+    return {
+      ...p,
+      id: `page_${p.slug}`,
+      requirementType,
+      enabled: isEnabled,
+      isPublished: isEnabled,
+      categorySource: profile.categoryName,
+      showInNavigation: p.showInNavigation !== false && isEnabled,
+      order: pIndex + 1,
+      sections: p.sections.map((sec, sIndex) => {
+        let customTitle = sec.title;
+        let customSubtitle = sec.subtitle;
 
-  const navItems = profile.defaultNavigation.map((nav, idx) => ({
-    id: nav.id || `nav_${nav.target}_${idx + 1}`,
-    label: nav.label,
-    target: nav.target,
-    type: (nav.type as any) || 'page',
-    order: idx + 1,
-  }));
+        if (sec.type === 'hero' && isHome) {
+          customTitle = company.name || profile.heroDefaults.title;
+          customSubtitle = company.shortDescription || profile.heroDefaults.subtitle;
+        }
+
+        return {
+          ...sec,
+          id: `sec_${sec.type}_${p.slug}_${sIndex + 1}`,
+          title: customTitle,
+          subtitle: customSubtitle,
+          order: sIndex + 1,
+        };
+      }),
+    };
+  });
+
+  // Append any custom user pages if provided
+  if (options?.customPages && options.customPages.length > 0) {
+    options.customPages.forEach((cp, idx) => {
+      customizedPages.push({
+        ...cp,
+        id: cp.id || `page_custom_${idx + 1}`,
+        order: customizedPages.length + 1,
+        requirementType: 'custom',
+        enabled: cp.enabled !== false,
+        isPublished: cp.isPublished !== false,
+      });
+    });
+  }
+
+  // Generate dynamic navigation items matching enabled pages
+  const enabledSlugs = new Set(customizedPages.filter((p) => p.enabled !== false && p.isPublished !== false).map((p) => p.slug));
+  
+  const navItems = profile.defaultNavigation
+    .filter((nav) => nav.type !== 'page' || enabledSlugs.has(nav.target))
+    .map((nav, idx) => ({
+      id: nav.id || `nav_${nav.target}_${idx + 1}`,
+      label: nav.label,
+      target: nav.target,
+      type: (nav.type as any) || 'page',
+      order: idx + 1,
+    }));
 
   return {
     design: {

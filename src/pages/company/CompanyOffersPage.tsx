@@ -13,7 +13,8 @@ import {
   AlertCircle,
   FileText,
   Bookmark,
-  CheckCircle2
+  CheckCircle2,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Offer, Announcement } from '../../types';
@@ -50,6 +51,7 @@ export const CompanyOffersPage: React.FC = () => {
     category: 'Academic' as Announcement['category'],
     description: '',
     content: '',
+    imageUrl: '',
     priority: 'normal' as Announcement['priority'],
     pinned: false,
     author: 'Principal / Administration',
@@ -116,6 +118,7 @@ export const CompanyOffersPage: React.FC = () => {
       category: 'Academic',
       description: '',
       content: '',
+      imageUrl: '',
       priority: 'normal',
       pinned: false,
       author: 'Principal / Administration',
@@ -133,6 +136,7 @@ export const CompanyOffersPage: React.FC = () => {
       category: ann.category,
       description: ann.description || '',
       content: ann.content || '',
+      imageUrl: ann.imageUrl || ann.image || '',
       priority: ann.priority || 'normal',
       pinned: !!ann.pinned,
       author: ann.author || 'School Administration',
@@ -153,6 +157,8 @@ export const CompanyOffersPage: React.FC = () => {
       category: announcementForm.category,
       description: announcementForm.description,
       content: announcementForm.content,
+      imageUrl: announcementForm.imageUrl.trim() || undefined,
+      image: announcementForm.imageUrl.trim() || undefined,
       priority: announcementForm.priority,
       pinned: announcementForm.pinned,
       author: announcementForm.author,
@@ -272,6 +278,17 @@ export const CompanyOffersPage: React.FC = () => {
                     : 'border-l-cyan-500'
                 }`}
               >
+                {(ann.imageUrl || ann.image) && (
+                  <div className="h-36 -mx-4 -mt-4 mb-2 overflow-hidden rounded-t-xl bg-slate-100 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800">
+                    <img
+                      src={ann.imageUrl || ann.image}
+                      alt={ann.title}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                )}
+
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -286,6 +303,11 @@ export const CompanyOffersPage: React.FC = () => {
                       {ann.priority === 'urgent' && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 flex items-center gap-1">
                           <AlertCircle className="w-3 h-3" /> Urgent
+                        </span>
+                      )}
+                      {(ann.imageUrl || ann.image) && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 flex items-center gap-1">
+                          <ImageIcon className="w-3 h-3" /> Has Image
                         </span>
                       )}
                     </div>
@@ -434,6 +456,28 @@ export const CompanyOffersPage: React.FC = () => {
               value={announcementForm.date}
               onChange={(e) => setAnnouncementForm({ ...announcementForm, date: e.target.value })}
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Input
+              label="Banner / Photo Image URL"
+              placeholder="https://images.unsplash.com/... (optional photo)"
+              value={announcementForm.imageUrl}
+              onChange={(e) => setAnnouncementForm({ ...announcementForm, imageUrl: e.target.value })}
+            />
+            {announcementForm.imageUrl && (
+              <div className="h-28 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <img
+                  src={announcementForm.imageUrl}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">

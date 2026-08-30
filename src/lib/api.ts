@@ -33,6 +33,8 @@ import {
   AuditLog,
   ThemeDefinition,
   FeatureDefinition,
+  DuplicateWebsiteOptions,
+  DuplicationResult,
 } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_SETTINGS, INITIAL_COMPANIES, INITIAL_WEBSITES, INITIAL_ANNOUNCEMENTS } from '../data/seed';
 import { THEME_REGISTRY } from '../data/themes';
@@ -960,6 +962,202 @@ export const api = {
     return api.saveWebsiteDraft(id, draftConfig, themeId);
   },
 
+  duplicateCompanyAndWebsite: async (options: DuplicateWebsiteOptions): Promise<DuplicationResult> => {
+    const { sourceCompanyId, newCompanyName, newCompanySlug, copyMenuContent, copyAnnouncements, copyOffers } = options;
+    const nowIso = new Date().toISOString();
+
+    try {
+      // 1. Fetch Source Company
+      const sourceCompany = await api.getCompany(sourceCompanyId);
+      if (!sourceCompany) {
+        throw new ApiError(404, `Source company ${sourceCompanyId} not found`);
+      }
+
+      // 2. Fetch Source Website
+      let sourceWebsite: Website | null = null;
+      try {
+        const webRes = await api.getCompanyWebsite(sourceCompanyId);
+        sourceWebsite = webRes.website;
+      } catch (wErr) {
+        console.warn('Could not fetch source website, falling back to default:', wErr);
+      }
+
+      // 3. Generate new Unique IDs
+      const randomSuffix = Math.random().toString(36).substring(2, 7);
+      const newCompanyId = `comp_${Date.now()}_${randomSuffix}`;
+      const newWebsiteId = `web_${Date.now()}_${randomSuffix}`;
+
+      // 4. Deep clone website draft config & assign fresh section/page IDs to prevent shared state
+      const sourceDraft = sourceWebsite?.draftConfig || (sourceCompany ? generateWebsiteConfigForCategory(sourceCompany) : null);
+      
+      let clonedDraftConfig: any = null;
+      if (sourceDraft) {
+        const rawCopy = JSON.parse(JSON.stringify(sourceDraft));
+        const clonedPages = (rawCopy.pages || []).map((page: any, pIdx: number) => {
+          const pageIdSuffix = Math.random().toString(36).substring(2, 6);
+          const newPageId = `page_${page.slug || 'p'}_${pIdx + 1}_${pageIdSuffix}`;
+          return {
+            ...page,
+            id: newPageId,
+            enabled: page.enabled !== undefined ? page.enabled : (page.isPublished !== false),
+            isPublished: page.isPublished !== false,
+            requirementType: page.requirementType || (page.isHome ? 'required' : 'recommended'),
+            categorySource: page.categorySource || sourceCompany.category,
+            sections: (page.sections || []).map((sec: any, sIdx: number) => ({
+              ...sec,
+              id: `sec_${sec.type || 'item'}_${sIdx + 1}_${Math.random().toString(36).substring(2, 6)}`,
+            })),
+          };
+        });
+
+        const clonedNav = (rawCopy.navigation || []).map((nav: any, nIdx: number) => ({
+          ...nav,
+          id: `nav_${nav.target || 'link'}_${nIdx + 1}_${Math.random().toString(36).substring(2, 6)}`,
+        }));
+
+        clonedDraftConfig = {
+          ...rawCopy,
+          pages: clonedPages,
+          navigation: clonedNav,
+          seo: {
+            ...rawCopy.seo,
+            siteTitle: `${newCompanyName} | Official Website`,
+            metaDescription: sourceCompany.shortDescription || `${newCompanyName} official digital website`,
+          },
+        };
+      }
+
+      // 5. Create independent Company Document in Firestore
+      const newCompany: Company = {
+        ...JSON.parse(JSON.stringify(sourceCompany)),
+        id: newCompanyId,
+        name: newCompanyName,
+        slug: newCompanySlug,
+        websiteId: newWebsiteId,
+        websiteStatus: 'draft',
+        status: 'active',
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      await withTimeout(setDoc(doc(firestoreDb, 'companies', newCompanyId), newCompany), 10000);
+
+      // 6. Create independent Website Document in Firestore
+      const newWebsite: Website = {
+        id: newWebsiteId,
+        companyId: newCompanyId,
+        themeId: sourceWebsite?.themeId || 'tpl_restaurant_signature',
+        status: 'draft',
+        draftConfig: clonedDraftConfig,
+        publishedConfig: null,
+        version: 1,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      await withTimeout(setDoc(doc(firestoreDb, 'websites', newWebsiteId), newWebsite), 10000);
+
+      // 7. Clone Menu & Products if requested
+      let duplicatedCategoriesCount = 0;
+      let duplicatedProductsCount = 0;
+
+      if (copyMenuContent) {
+        try {
+          const [sourceCats, sourceProds] = await Promise.all([
+            api.getProductCategories(sourceCompanyId),
+            api.getProducts(sourceCompanyId),
+          ]);
+
+          const catIdMap = new Map<string, string>();
+
+          // Clone categories
+          for (const cat of sourceCats) {
+            const newCatId = `pcat_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+            catIdMap.set(cat.id, newCatId);
+            const newCat: ProductCategory = {
+              ...cat,
+              id: newCatId,
+              companyId: newCompanyId,
+            };
+            await setDoc(doc(firestoreDb, 'productCategories', newCatId), newCat);
+            duplicatedCategoriesCount++;
+          }
+
+          // Clone products
+          for (const prod of sourceProds) {
+            const newProdId = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+            const mappedCatId = prod.categoryId ? catIdMap.get(prod.categoryId) || undefined : undefined;
+            const newProd: Product = {
+              ...prod,
+              id: newProdId,
+              companyId: newCompanyId,
+              categoryId: mappedCatId,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+            };
+            await setDoc(doc(firestoreDb, 'products', newProdId), newProd);
+            duplicatedProductsCount++;
+          }
+        } catch (menuErr) {
+          console.warn('Error cloning menu content:', menuErr);
+        }
+      }
+
+      // 8. Clone Announcements if requested
+      if (copyAnnouncements) {
+        try {
+          const sourceAnns = await api.getAnnouncements(sourceCompanyId);
+          for (const ann of sourceAnns) {
+            const newAnnId = `ann_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+            const newAnn: Announcement = {
+              ...ann,
+              id: newAnnId,
+              companyId: newCompanyId,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+            };
+            await setDoc(doc(firestoreDb, 'announcements', newAnnId), newAnn);
+          }
+        } catch (annErr) {
+          console.warn('Error cloning announcements:', annErr);
+        }
+      }
+
+      // 9. Clone Offers if requested
+      if (copyOffers) {
+        try {
+          const sourceOffers = await api.getOffers(sourceCompanyId);
+          for (const off of sourceOffers) {
+            const newOffId = `off_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+            const newOffer: Offer = {
+              ...off,
+              id: newOffId,
+              companyId: newCompanyId,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+            };
+            await setDoc(doc(firestoreDb, 'offers', newOffId), newOffer);
+          }
+        } catch (offErr) {
+          console.warn('Error cloning offers:', offErr);
+        }
+      }
+
+      // 10. Audit log
+      await logAudit('DUPLICATE', 'COMPANY', newCompanyId, `Duplicated website from ${sourceCompany.name} (${sourceCompanyId}) to ${newCompanyName} (${newCompanyId})`);
+
+      return {
+        company: newCompany,
+        website: newWebsite,
+        duplicatedCategoriesCount,
+        duplicatedProductsCount,
+      };
+    } catch (err: any) {
+      logError('duplicateCompanyAndWebsite', err, { sourceCompanyId, newCompanyName });
+      throw new ApiError(500, `Website duplication failed: ${err.message || String(err)}`);
+    }
+  },
+
   publishWebsite: async (id: string): Promise<Website> => {
     try {
       let targetId = id;
@@ -1803,12 +2001,22 @@ export const api = {
   createAnnouncement: async (data: Partial<Announcement>): Promise<Announcement> => {
     const annId = data.id || `ann_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const nowIso = new Date().toISOString();
+    const img = (data.imageUrl || data.image || '').trim();
     const newAnn: Announcement = {
       id: annId,
       companyId: data.companyId || '',
       title: data.title || 'Important Notice',
       content: data.content || '',
-      image: data.image || '',
+      image: img,
+      imageUrl: img,
+      category: data.category || 'General',
+      description: data.description || '',
+      priority: data.priority || 'normal',
+      pinned: data.pinned || false,
+      author: data.author || '',
+      date: data.date || nowIso.split('T')[0],
+      tags: data.tags || [],
+      attachmentUrl: data.attachmentUrl || '',
       publishDate: data.publishDate || nowIso,
       status: (data.status as any) || 'published',
       featured: data.featured || false,
@@ -1827,7 +2035,12 @@ export const api = {
 
   updateAnnouncement: async (id: string, data: Partial<Announcement>): Promise<Announcement> => {
     const annRef = doc(firestoreDb, 'announcements', id);
-    const updatePayload = { ...data, updatedAt: new Date().toISOString() };
+    const img = data.imageUrl !== undefined ? data.imageUrl.trim() : (data.image !== undefined ? data.image.trim() : undefined);
+    const updatePayload: any = {
+      ...data,
+      ...(img !== undefined ? { image: img, imageUrl: img } : {}),
+      updatedAt: new Date().toISOString(),
+    };
     try {
       await withTimeout(setDoc(annRef, updatePayload, { merge: true }), 8000);
       const snap = await getDoc(annRef);

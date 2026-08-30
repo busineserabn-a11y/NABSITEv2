@@ -52,6 +52,8 @@ import { StudioFeaturesPanel } from '../../components/studio/StudioFeaturesPanel
 import { StudioSettingsPanel } from '../../components/studio/StudioSettingsPanel';
 import { StudioNavigationManager } from '../../components/studio/StudioNavigationManager';
 import { StudioPageCustomizer } from '../../components/studio/StudioPageCustomizer';
+import { StudioPageControlModal } from '../../components/studio/StudioPageControlModal';
+import { DuplicateWebsiteModal } from '../../components/company/DuplicateWebsiteModal';
 import { TemplateSwitcherModal } from '../../components/studio/TemplateSwitcherModal';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
@@ -79,6 +81,7 @@ export const WebsiteStudioPage: React.FC = () => {
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [isTemplateSwitcherOpen, setIsTemplateSwitcherOpen] = useState(false);
+  const [isPageControlModalOpen, setIsPageControlModalOpen] = useState(false);
 
   // Saving & Publishing State
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -807,6 +810,7 @@ export const WebsiteStudioPage: React.FC = () => {
                 setActivePageSlug(slug);
                 setActiveTab('page_edit');
               }}
+              onOpenPageControl={() => setIsPageControlModalOpen(true)}
               onAddPage={handleAddPage}
               onUpdatePage={handleUpdatePage}
               onDeletePage={handleDeletePage}
@@ -1037,6 +1041,23 @@ export const WebsiteStudioPage: React.FC = () => {
           offers={offers}
           announcements={announcements}
           onApplyTemplate={handleApplyTemplate}
+        />
+      )}
+
+      {/* Category Page Control Modal */}
+      {isPageControlModalOpen && company && (
+        <StudioPageControlModal
+          isOpen={isPageControlModalOpen}
+          onClose={() => setIsPageControlModalOpen(false)}
+          pages={pages}
+          company={company}
+          onUpdatePages={(updatedPages) => {
+            handleUpdateConfig({ ...config, pages: updatedPages });
+          }}
+          onSelectPage={(slug) => {
+            setActivePageSlug(slug);
+            setIsPageControlModalOpen(false);
+          }}
         />
       )}
     </div>
