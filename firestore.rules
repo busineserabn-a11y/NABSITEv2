@@ -149,5 +149,36 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isSignedIn();
     }
+
+    // School Academic Module: Academic Years, Grades, Sections, Subjects, Students, Marklists
+    match /academicYears/{yearId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /grades/{gradeId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /sections/{sectionId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /subjects/{subjectId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /students/{studentId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /marklists/{marklistId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
   }
 }

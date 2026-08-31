@@ -13,6 +13,8 @@ import {
   Phone,
   Send,
   CheckCircle2,
+  GraduationCap,
+  FileCheck2,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Company, Website } from '../../types';
@@ -82,6 +84,13 @@ export const CompanyHubPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {company.category === 'Schools' && (
+            <Link to={`/company/${company.id}/academic`}>
+              <Button size="md" variant="primary" icon={GraduationCap} className="shadow-xs bg-amber-500 hover:bg-amber-600 text-slate-950">
+                Academic Hub
+              </Button>
+            </Link>
+          )}
           <Link to={`/company/${company.id}/wizard`}>
             <Button size="md" variant="outline" icon={Sparkles}>
               Website Wizard
@@ -155,6 +164,34 @@ export const CompanyHubPage: React.FC = () => {
 
       {/* Module Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {company.category === 'Schools' && (
+          <Link to={`/company/${company.id}/academic`} className="sm:col-span-2 lg:col-span-3">
+            <Card variant="bordered" className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/30 hover:border-amber-500 transition-all p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer group shadow-xs">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-amber-500/20 shrink-0">
+                  <GraduationCap className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-extrabold text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors">
+                      School Academic Engine & Marklists
+                    </h3>
+                    <Badge variant="info" size="sm">
+                      Core Academic Features
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                    Manage Academic Years (Ethiopian/Gregorian), Grades & Sections, Subjects, Student Rosters (Long IDs), and enter real Student Marklists.
+                  </p>
+                </div>
+              </div>
+              <Button size="sm" variant="primary" icon={FileCheck2} className="shrink-0 bg-amber-500 hover:bg-amber-600 text-slate-950">
+                Launch Academic Workstation
+              </Button>
+            </Card>
+          </Link>
+        )}
+
         <Link to={`/company/${company.id}/products`}>
           <Card variant="bordered" className="hover:border-slate-400 transition-all space-y-3 cursor-pointer group">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">

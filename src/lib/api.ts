@@ -35,8 +35,24 @@ import {
   FeatureDefinition,
   DuplicateWebsiteOptions,
   DuplicationResult,
+  AcademicYear,
+  Grade,
+  Section,
+  Subject,
+  Student,
+  Marklist,
+  SchoolDashboardStats,
+  SchoolSearchResult,
 } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_SETTINGS, INITIAL_COMPANIES, INITIAL_WEBSITES, INITIAL_ANNOUNCEMENTS } from '../data/seed';
+import {
+  INITIAL_ACADEMIC_YEARS,
+  INITIAL_GRADES,
+  INITIAL_SECTIONS,
+  INITIAL_SUBJECTS,
+  INITIAL_STUDENTS,
+  INITIAL_MARKLISTS,
+} from '../data/schoolSeed';
 import { THEME_REGISTRY } from '../data/themes';
 import { FEATURE_REGISTRY } from '../data/features';
 import { getCategoryDesignProfile, generateWebsiteConfigForCategory } from '../data/categoryProfiles';
@@ -2093,5 +2109,776 @@ export const api = {
 
   inviteUser: async (data: any): Promise<{ success: boolean }> => {
     return { success: true };
+  },
+
+  // ===========================================================================
+  // School Academic Engine API (V1 Core Features)
+  // ===========================================================================
+
+  // --- 1. Academic Years ---
+  getAcademicYears: async (companyId: string): Promise<AcademicYear[]> => {
+    try {
+      const q = query(collection(firestoreDb, 'academicYears'), where('companyId', '==', companyId));
+      const snap = await withTimeout(getDocs(q), 6000);
+      if (!snap.empty) {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as AcademicYear));
+        return list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      }
+    } catch (err) {
+      logError('getAcademicYears', err, { companyId });
+    }
+    // Return seeded fallback if matching company
+    return INITIAL_ACADEMIC_YEARS.filter((ay) => ay.companyId === companyId);
+  },
+
+  createAcademicYear: async (data: Partial<AcademicYear> & { companyId: string; name: string }): Promise<AcademicYear> => {
+    const id = data.id || `ay_${data.companyId.replace('comp_', '')}_${Date.now().toString(36)}`;
+    const nowIso = new Date().toISOString();
+    const docRef = doc(firestoreDb, 'academicYears', id);
+
+    // If marked active, deactivate others
+    if (data.isActive) {
+      try {
+        const existing = await api.getAcademicYears(data.companyId);
+        for (const yr of existing) {
+          if (yr.isActive && yr.id !== id) {
+            await updateDoc(doc(firestoreDb, 'academicYears', yr.id), { isActive: false, updatedAt: nowIso }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.warn('Could not reset other active years:', err);
+      }
+    }
+
+    const payload: AcademicYear = {
+      id,
+      companyId: data.companyId,
+      name: data.name.trim(),
+      calendarType: data.calendarType || 'ETHIOPIAN',
+      startDate: data.startDate || '',
+      endDate: data.endDate || '',
+      isActive: data.isActive ?? false,
+      description: data.description || '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      await withTimeout(setDoc(docRef, payload), 8000);
+      return payload;
+    } catch (err) {
+      logError('createAcademicYear', err, { id });
+      throw new ApiError(500, 'Failed to create academic year in database');
+    }
+  },
+
+  updateAcademicYear: async (id: string, data: Partial<AcademicYear>): Promise<AcademicYear> => {
+    const docRef = doc(firestoreDb, 'academicYears', id);
+    const nowIso = new Date().toISOString();
+
+    if (data.isActive && data.companyId) {
+      try {
+        const existing = await api.getAcademicYears(data.companyId);
+        for (const yr of existing) {
+          if (yr.isActive && yr.id !== id) {
+            await updateDoc(doc(firestoreDb, 'academicYears', yr.id), { isActive: false, updatedAt: nowIso }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.warn('Could not reset active years on update:', err);
+      }
+    }
+
+    const updatePayload = {
+      ...data,
+      updatedAt: nowIso,
+    };
+
+    try {
+      await withTimeout(setDoc(docRef, updatePayload, { merge: true }), 8000);
+      const snap = await getDoc(docRef);
+      return { id: snap.id, ...snap.data() } as AcademicYear;
+    } catch (err) {
+      logError('updateAcademicYear', err, { id });
+      throw new ApiError(500, 'Failed to update academic year');
+    }
+  },
+
+  setActiveAcademicYear: async (companyId: string, yearId: string): Promise<void> => {
+    const nowIso = new Date().toISOString();
+    try {
+      const allYears = await api.getAcademicYears(companyId);
+      for (const yr of allYears) {
+        const targetActive = yr.id === yearId;
+        if (yr.isActive !== targetActive) {
+          await setDoc(doc(firestoreDb, 'academicYears', yr.id), { isActive: targetActive, updatedAt: nowIso }, { merge: true });
+        }
+      }
+    } catch (err) {
+      logError('setActiveAcademicYear', err, { companyId, yearId });
+      throw new ApiError(500, 'Failed to set active academic year');
+    }
+  },
+
+  deleteAcademicYear: async (id: string): Promise<{ success: boolean }> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'academicYears', id)), 8000);
+      return { success: true };
+    } catch (err) {
+      logError('deleteAcademicYear', err, { id });
+      throw new ApiError(500, 'Failed to delete academic year');
+    }
+  },
+
+  // --- 2. Grades ---
+  getGrades: async (companyId: string): Promise<Grade[]> => {
+    try {
+      const q = query(collection(firestoreDb, 'grades'), where('companyId', '==', companyId));
+      const snap = await withTimeout(getDocs(q), 6000);
+      if (!snap.empty) {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Grade));
+        return list.sort((a, b) => (a.level || 0) - (b.level || 0));
+      }
+    } catch (err) {
+      logError('getGrades', err, { companyId });
+    }
+    return INITIAL_GRADES.filter((g) => g.companyId === companyId);
+  },
+
+  createGrade: async (data: Partial<Grade> & { companyId: string; name: string }): Promise<Grade> => {
+    const id = data.id || `gr_${data.companyId.replace('comp_', '')}_${Date.now().toString(36)}`;
+    const nowIso = new Date().toISOString();
+    const docRef = doc(firestoreDb, 'grades', id);
+
+    const payload: Grade = {
+      id,
+      companyId: data.companyId,
+      name: data.name.trim(),
+      level: data.level ?? parseInt(data.name.replace(/\D/g, '') || '0', 10),
+      academicYearId: data.academicYearId || '',
+      description: data.description || '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      await withTimeout(setDoc(docRef, payload), 8000);
+      return payload;
+    } catch (err) {
+      logError('createGrade', err, { id });
+      throw new ApiError(500, 'Failed to create grade');
+    }
+  },
+
+  updateGrade: async (id: string, data: Partial<Grade>): Promise<Grade> => {
+    const docRef = doc(firestoreDb, 'grades', id);
+    const updatePayload = {
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await withTimeout(setDoc(docRef, updatePayload, { merge: true }), 8000);
+      const snap = await getDoc(docRef);
+      return { id: snap.id, ...snap.data() } as Grade;
+    } catch (err) {
+      logError('updateGrade', err, { id });
+      throw new ApiError(500, 'Failed to update grade');
+    }
+  },
+
+  deleteGrade: async (id: string): Promise<{ success: boolean }> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'grades', id)), 8000);
+      return { success: true };
+    } catch (err) {
+      logError('deleteGrade', err, { id });
+      throw new ApiError(500, 'Failed to delete grade');
+    }
+  },
+
+  // --- 3. Sections ---
+  getSections: async (companyId: string, gradeId?: string): Promise<Section[]> => {
+    try {
+      let q = query(collection(firestoreDb, 'sections'), where('companyId', '==', companyId));
+      if (gradeId) {
+        q = query(collection(firestoreDb, 'sections'), where('companyId', '==', companyId), where('gradeId', '==', gradeId));
+      }
+      const snap = await withTimeout(getDocs(q), 6000);
+      if (!snap.empty) {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Section));
+        return list.sort((a, b) => a.name.localeCompare(b.name));
+      }
+    } catch (err) {
+      logError('getSections', err, { companyId, gradeId });
+    }
+    const filtered = INITIAL_SECTIONS.filter((s) => s.companyId === companyId && (!gradeId || s.gradeId === gradeId));
+    return filtered;
+  },
+
+  createSection: async (data: Partial<Section> & { companyId: string; gradeId: string; name: string }): Promise<Section> => {
+    const id = data.id || `sec_${data.companyId.replace('comp_', '')}_${Date.now().toString(36)}`;
+    const nowIso = new Date().toISOString();
+    const docRef = doc(firestoreDb, 'sections', id);
+
+    const payload: Section = {
+      id,
+      companyId: data.companyId,
+      gradeId: data.gradeId,
+      name: data.name.trim(),
+      room: data.room || '',
+      capacity: data.capacity || 40,
+      academicYearId: data.academicYearId || '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      await withTimeout(setDoc(docRef, payload), 8000);
+      return payload;
+    } catch (err) {
+      logError('createSection', err, { id });
+      throw new ApiError(500, 'Failed to create section');
+    }
+  },
+
+  updateSection: async (id: string, data: Partial<Section>): Promise<Section> => {
+    const docRef = doc(firestoreDb, 'sections', id);
+    const updatePayload = {
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await withTimeout(setDoc(docRef, updatePayload, { merge: true }), 8000);
+      const snap = await getDoc(docRef);
+      return { id: snap.id, ...snap.data() } as Section;
+    } catch (err) {
+      logError('updateSection', err, { id });
+      throw new ApiError(500, 'Failed to update section');
+    }
+  },
+
+  deleteSection: async (id: string): Promise<{ success: boolean }> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'sections', id)), 8000);
+      return { success: true };
+    } catch (err) {
+      logError('deleteSection', err, { id });
+      throw new ApiError(500, 'Failed to delete section');
+    }
+  },
+
+  // --- 4. Subjects ---
+  getSubjects: async (companyId: string, gradeId?: string): Promise<Subject[]> => {
+    try {
+      const q = query(collection(firestoreDb, 'subjects'), where('companyId', '==', companyId));
+      const snap = await withTimeout(getDocs(q), 6000);
+      if (!snap.empty) {
+        let list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Subject));
+        if (gradeId) {
+          list = list.filter((sub) => sub.isCommon || (sub.gradeIds && sub.gradeIds.includes(gradeId)));
+        }
+        return list.sort((a, b) => a.name.localeCompare(b.name));
+      }
+    } catch (err) {
+      logError('getSubjects', err, { companyId, gradeId });
+    }
+    let list = INITIAL_SUBJECTS.filter((s) => s.companyId === companyId);
+    if (gradeId) {
+      list = list.filter((sub) => sub.isCommon || (sub.gradeIds && sub.gradeIds.includes(gradeId)));
+    }
+    return list;
+  },
+
+  createSubject: async (data: Partial<Subject> & { companyId: string; name: string }): Promise<Subject> => {
+    const id = data.id || `sub_${data.companyId.replace('comp_', '')}_${Date.now().toString(36)}`;
+    const nowIso = new Date().toISOString();
+    const docRef = doc(firestoreDb, 'subjects', id);
+
+    const payload: Subject = {
+      id,
+      companyId: data.companyId,
+      name: data.name.trim(),
+      code: data.code || '',
+      gradeIds: data.gradeIds || [],
+      sectionIds: data.sectionIds || [],
+      maxScore: data.maxScore || 100,
+      isCommon: data.isCommon ?? false,
+      description: data.description || '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      await withTimeout(setDoc(docRef, payload), 8000);
+      return payload;
+    } catch (err) {
+      logError('createSubject', err, { id });
+      throw new ApiError(500, 'Failed to create subject');
+    }
+  },
+
+  updateSubject: async (id: string, data: Partial<Subject>): Promise<Subject> => {
+    const docRef = doc(firestoreDb, 'subjects', id);
+    const updatePayload = {
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await withTimeout(setDoc(docRef, updatePayload, { merge: true }), 8000);
+      const snap = await getDoc(docRef);
+      return { id: snap.id, ...snap.data() } as Subject;
+    } catch (err) {
+      logError('updateSubject', err, { id });
+      throw new ApiError(500, 'Failed to update subject');
+    }
+  },
+
+  deleteSubject: async (id: string): Promise<{ success: boolean }> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'subjects', id)), 8000);
+      return { success: true };
+    } catch (err) {
+      logError('deleteSubject', err, { id });
+      throw new ApiError(500, 'Failed to delete subject');
+    }
+  },
+
+  // --- 5. Students ---
+  getStudents: async (
+    companyId: string,
+    filters?: { gradeId?: string; sectionId?: string; academicYearId?: string; search?: string }
+  ): Promise<Student[]> => {
+    try {
+      let q = query(collection(firestoreDb, 'students'), where('companyId', '==', companyId));
+      if (filters?.gradeId) {
+        q = query(q, where('gradeId', '==', filters.gradeId));
+      }
+      if (filters?.sectionId) {
+        q = query(q, where('sectionId', '==', filters.sectionId));
+      }
+      const snap = await withTimeout(getDocs(q), 6000);
+      if (!snap.empty) {
+        let list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
+        if (filters?.academicYearId) {
+          list = list.filter((s) => !s.academicYearId || s.academicYearId === filters.academicYearId);
+        }
+        if (filters?.search && filters.search.trim()) {
+          const sTerm = filters.search.toLowerCase().trim();
+          list = list.filter(
+            (s) =>
+              s.fullName.toLowerCase().includes(sTerm) ||
+              s.admissionNo.toLowerCase().includes(sTerm) ||
+              s.id.toLowerCase().includes(sTerm)
+          );
+        }
+        return list.sort((a, b) => a.fullName.localeCompare(b.fullName));
+      }
+    } catch (err) {
+      logError('getStudents', err, { companyId, filters });
+    }
+
+    // Fallback to initial students
+    let list = INITIAL_STUDENTS.filter((s) => s.companyId === companyId);
+    if (filters?.gradeId) {
+      list = list.filter((s) => s.gradeId === filters.gradeId);
+    }
+    if (filters?.sectionId) {
+      list = list.filter((s) => s.sectionId === filters.sectionId);
+    }
+    if (filters?.academicYearId) {
+      list = list.filter((s) => !s.academicYearId || s.academicYearId === filters.academicYearId);
+    }
+    if (filters?.search && filters.search.trim()) {
+      const sTerm = filters.search.toLowerCase().trim();
+      list = list.filter(
+        (s) =>
+          s.fullName.toLowerCase().includes(sTerm) ||
+          s.admissionNo.toLowerCase().includes(sTerm) ||
+          s.id.toLowerCase().includes(sTerm)
+      );
+    }
+    return list.sort((a, b) => a.fullName.localeCompare(b.fullName));
+  },
+
+  createStudent: async (data: Partial<Student> & { companyId: string; fullName: string; gradeId: string; sectionId: string }): Promise<Student> => {
+    // Generate long unique identifier format
+    const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const id = data.id || `GG_STU_${Date.now()}_${randomSuffix}`;
+    const nowIso = new Date().toISOString();
+    const docRef = doc(firestoreDb, 'students', id);
+
+    const payload: Student = {
+      id,
+      companyId: data.companyId,
+      fullName: data.fullName.trim(),
+      admissionNo: data.admissionNo || `ADM/${new Date().getFullYear()}/${randomSuffix}`,
+      gender: data.gender || 'male',
+      dateOfBirth: data.dateOfBirth || '',
+      gradeId: data.gradeId,
+      sectionId: data.sectionId,
+      academicYearId: data.academicYearId || '',
+      status: data.status || 'active',
+      guardianName: data.guardianName || '',
+      guardianPhone: data.guardianPhone || '',
+      guardianEmail: data.guardianEmail || '',
+      notes: data.notes || '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      await withTimeout(setDoc(docRef, payload), 8000);
+      return payload;
+    } catch (err) {
+      logError('createStudent', err, { id });
+      throw new ApiError(500, 'Failed to register student');
+    }
+  },
+
+  updateStudent: async (id: string, data: Partial<Student>): Promise<Student> => {
+    const docRef = doc(firestoreDb, 'students', id);
+    const updatePayload = {
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await withTimeout(setDoc(docRef, updatePayload, { merge: true }), 8000);
+      const snap = await getDoc(docRef);
+      return { id: snap.id, ...snap.data() } as Student;
+    } catch (err) {
+      logError('updateStudent', err, { id });
+      throw new ApiError(500, 'Failed to update student profile');
+    }
+  },
+
+  deleteStudent: async (id: string): Promise<{ success: boolean }> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'students', id)), 8000);
+      return { success: true };
+    } catch (err) {
+      logError('deleteStudent', err, { id });
+      throw new ApiError(500, 'Failed to remove student');
+    }
+  },
+
+  // --- 6. Marklist Engine ---
+  getMarklist: async (
+    companyId: string,
+    academicYearId: string,
+    gradeId: string,
+    sectionId: string,
+    subjectId: string
+  ): Promise<Marklist> => {
+    const marklistId = `marklist_${academicYearId}_${gradeId}_${sectionId}_${subjectId}`;
+    const docRef = doc(firestoreDb, 'marklists', marklistId);
+
+    // Fetch students belonging to this grade and section
+    const students = await api.getStudents(companyId, { gradeId, sectionId, academicYearId });
+
+    try {
+      const snap = await withTimeout(getDoc(docRef), 6000);
+      if (snap.exists()) {
+        const savedData = snap.data() as Marklist;
+        // Merge with current roster to ensure newly added students appear seamlessly
+        const existingEntriesMap = new Map(savedData.entries.map((e) => [e.studentId, e]));
+        const mergedEntries = students.map((stu) => {
+          const existing = existingEntriesMap.get(stu.id);
+          return {
+            studentId: stu.id,
+            studentName: stu.fullName,
+            admissionNo: stu.admissionNo,
+            score: existing ? existing.score : null,
+            notes: existing?.notes || '',
+            updatedAt: existing?.updatedAt || savedData.updatedAt,
+          };
+        });
+
+        return {
+          id: marklistId,
+          companyId,
+          academicYearId,
+          gradeId,
+          sectionId,
+          subjectId,
+          maxScore: savedData.maxScore || 100,
+          status: savedData.status || 'draft',
+          entries: mergedEntries,
+          lastUpdatedBy: savedData.lastUpdatedBy,
+          createdAt: savedData.createdAt,
+          updatedAt: savedData.updatedAt,
+        };
+      }
+    } catch (err) {
+      logError('getMarklist', err, { marklistId });
+    }
+
+    // Check seed marklists
+    const seeded = INITIAL_MARKLISTS.find(
+      (m) =>
+        m.companyId === companyId &&
+        m.academicYearId === academicYearId &&
+        m.gradeId === gradeId &&
+        m.sectionId === sectionId &&
+        m.subjectId === subjectId
+    );
+
+    if (seeded) {
+      const existingEntriesMap = new Map(seeded.entries.map((e) => [e.studentId, e]));
+      const mergedEntries = students.map((stu) => {
+        const existing = existingEntriesMap.get(stu.id);
+        return {
+          studentId: stu.id,
+          studentName: stu.fullName,
+          admissionNo: stu.admissionNo,
+          score: existing ? existing.score : null,
+          notes: existing?.notes || '',
+          updatedAt: existing?.updatedAt || seeded.updatedAt,
+        };
+      });
+      return { ...seeded, entries: mergedEntries };
+    }
+
+    // New blank assessment sheet with all students of section ready
+    return {
+      id: marklistId,
+      companyId,
+      academicYearId,
+      gradeId,
+      sectionId,
+      subjectId,
+      maxScore: 100,
+      status: 'draft',
+      entries: students.map((stu) => ({
+        studentId: stu.id,
+        studentName: stu.fullName,
+        admissionNo: stu.admissionNo,
+        score: null,
+      })),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  },
+
+  saveMarklist: async (
+    marklistData: Partial<Marklist> & {
+      companyId: string;
+      academicYearId: string;
+      gradeId: string;
+      sectionId: string;
+      subjectId: string;
+      entries: Array<{ studentId: string; studentName: string; admissionNo: string; score: number | null; notes?: string }>;
+    }
+  ): Promise<Marklist> => {
+    const marklistId =
+      marklistData.id ||
+      `marklist_${marklistData.academicYearId}_${marklistData.gradeId}_${marklistData.sectionId}_${marklistData.subjectId}`;
+    const nowIso = new Date().toISOString();
+    const docRef = doc(firestoreDb, 'marklists', marklistId);
+
+    const payload: Marklist = {
+      id: marklistId,
+      companyId: marklistData.companyId,
+      academicYearId: marklistData.academicYearId,
+      gradeId: marklistData.gradeId,
+      sectionId: marklistData.sectionId,
+      subjectId: marklistData.subjectId,
+      maxScore: marklistData.maxScore ?? 100,
+      status: marklistData.status || 'submitted',
+      entries: marklistData.entries.map((e) => ({
+        studentId: e.studentId,
+        studentName: e.studentName,
+        admissionNo: e.admissionNo,
+        score: e.score,
+        notes: e.notes || '',
+        updatedAt: nowIso,
+      })),
+      lastUpdatedBy: marklistData.lastUpdatedBy || 'Faculty / Administrator',
+      createdAt: marklistData.createdAt || nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      await withTimeout(setDoc(docRef, payload, { merge: true }), 8000);
+      return payload;
+    } catch (err) {
+      logError('saveMarklist', err, { marklistId });
+      throw new ApiError(500, 'Failed to save student marklist');
+    }
+  },
+
+  // --- 7. School Dashboard Stats & Search ---
+  getSchoolDashboardStats: async (companyId: string): Promise<SchoolDashboardStats> => {
+    try {
+      const [years, grades, sections, subjects, students, announcements] = await Promise.all([
+        api.getAcademicYears(companyId),
+        api.getGrades(companyId),
+        api.getSections(companyId),
+        api.getSubjects(companyId),
+        api.getStudents(companyId),
+        api.getAnnouncements(companyId),
+      ]);
+
+      const activeYear = years.find((y) => y.isActive) || years[0] || null;
+
+      // Query saved marklists
+      let savedMarklists: Marklist[] = [];
+      try {
+        const q = query(collection(firestoreDb, 'marklists'), where('companyId', '==', companyId));
+        const snap = await withTimeout(getDocs(q), 6000);
+        if (!snap.empty) {
+          savedMarklists = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Marklist));
+        } else {
+          savedMarklists = INITIAL_MARKLISTS.filter((m) => m.companyId === companyId);
+        }
+      } catch {
+        savedMarklists = INITIAL_MARKLISTS.filter((m) => m.companyId === companyId);
+      }
+
+      const gradesMap = new Map(grades.map((g) => [g.id, g.name]));
+      const sectionsMap = new Map(sections.map((s) => [s.id, s.name]));
+      const subjectsMap = new Map(subjects.map((sub) => [sub.id, sub.name]));
+      const yearsMap = new Map(years.map((y) => [y.id, y.name]));
+
+      const recentMarklists = savedMarklists.slice(0, 5).map((m) => {
+        const filled = m.entries.filter((e) => e.score !== null && e.score !== undefined).length;
+        return {
+          id: m.id,
+          gradeName: gradesMap.get(m.gradeId) || 'Grade',
+          sectionName: sectionsMap.get(m.sectionId) || 'Section',
+          subjectName: subjectsMap.get(m.subjectId) || 'Subject',
+          academicYearName: yearsMap.get(m.academicYearId) || 'Academic Year',
+          filledCount: filled,
+          totalCount: m.entries.length,
+          updatedAt: m.updatedAt,
+        };
+      });
+
+      return {
+        gradesCount: grades.length,
+        sectionsCount: sections.length,
+        subjectsCount: subjects.length,
+        studentsCount: students.length,
+        activeAcademicYear: activeYear,
+        recentAnnouncementsCount: announcements.length,
+        savedMarklistsCount: savedMarklists.length,
+        recentMarklists,
+      };
+    } catch (err) {
+      logError('getSchoolDashboardStats', err, { companyId });
+      return {
+        gradesCount: 4,
+        sectionsCount: 8,
+        subjectsCount: 10,
+        studentsCount: 14,
+        activeAcademicYear: INITIAL_ACADEMIC_YEARS[0],
+        recentAnnouncementsCount: 3,
+        savedMarklistsCount: 2,
+        recentMarklists: [],
+      };
+    }
+  },
+
+  globalSchoolSearch: async (companyId: string, term: string): Promise<SchoolSearchResult[]> => {
+    if (!term || !term.trim()) return [];
+    const cleanTerm = term.toLowerCase().trim();
+
+    const [students, grades, sections, subjects, announcements] = await Promise.all([
+      api.getStudents(companyId),
+      api.getGrades(companyId),
+      api.getSections(companyId),
+      api.getSubjects(companyId),
+      api.getAnnouncements(companyId),
+    ]);
+
+    const results: SchoolSearchResult[] = [];
+
+    // Search Students
+    students.forEach((stu) => {
+      if (
+        stu.fullName.toLowerCase().includes(cleanTerm) ||
+        stu.admissionNo.toLowerCase().includes(cleanTerm) ||
+        stu.id.toLowerCase().includes(cleanTerm)
+      ) {
+        const gradeName = grades.find((g) => g.id === stu.gradeId)?.name || 'Grade';
+        const sectionName = sections.find((s) => s.id === stu.sectionId)?.name || 'Section';
+        results.push({
+          type: 'student',
+          id: stu.id,
+          title: stu.fullName,
+          subtitle: `${gradeName} • ${sectionName} • ID: ${stu.admissionNo}`,
+          badge: 'Student',
+          details: { ...stu, gradeName, sectionName },
+          linkTab: 'students',
+        });
+      }
+    });
+
+    // Search Grades
+    grades.forEach((g) => {
+      if (g.name.toLowerCase().includes(cleanTerm) || (g.description && g.description.toLowerCase().includes(cleanTerm))) {
+        results.push({
+          type: 'grade',
+          id: g.id,
+          title: g.name,
+          subtitle: g.description || `Level ${g.level}`,
+          badge: 'Grade',
+          linkTab: 'grades',
+        });
+      }
+    });
+
+    // Search Sections
+    sections.forEach((sec) => {
+      const parentGrade = grades.find((g) => g.id === sec.gradeId)?.name || '';
+      if (sec.name.toLowerCase().includes(cleanTerm) || (sec.room && sec.room.toLowerCase().includes(cleanTerm))) {
+        results.push({
+          type: 'section',
+          id: sec.id,
+          title: `${sec.name} (${parentGrade})`,
+          subtitle: sec.room ? `Room: ${sec.room} • Capacity: ${sec.capacity}` : `Grade: ${parentGrade}`,
+          badge: 'Section',
+          linkTab: 'grades',
+        });
+      }
+    });
+
+    // Search Subjects
+    subjects.forEach((sub) => {
+      if (
+        sub.name.toLowerCase().includes(cleanTerm) ||
+        (sub.code && sub.code.toLowerCase().includes(cleanTerm)) ||
+        (sub.description && sub.description.toLowerCase().includes(cleanTerm))
+      ) {
+        results.push({
+          type: 'subject',
+          id: sub.id,
+          title: sub.name,
+          subtitle: `Code: ${sub.code || 'N/A'} • Max Score: ${sub.maxScore}${sub.isCommon ? ' • Common Subject' : ''}`,
+          badge: 'Subject',
+          linkTab: 'subjects',
+        });
+      }
+    });
+
+    // Search Announcements
+    announcements.forEach((ann) => {
+      const content = ann.content || ann.description || '';
+      if (ann.title.toLowerCase().includes(cleanTerm) || content.toLowerCase().includes(cleanTerm)) {
+        results.push({
+          type: 'announcement',
+          id: ann.id,
+          title: ann.title,
+          subtitle: ann.publishDate ? `Published: ${ann.publishDate.substring(0, 10)}` : 'School Announcement',
+          badge: 'Announcement',
+          linkTab: 'announcements',
+        });
+      }
+    });
+
+    return results;
   },
 };

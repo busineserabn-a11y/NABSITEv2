@@ -45,6 +45,7 @@ import { CompanyReviewsPage } from './pages/company/CompanyReviewsPage';
 import { CompanyOffersPage } from './pages/company/CompanyOffersPage';
 import { CompanyProfilePage } from './pages/company/CompanyProfilePage';
 import { CompanyQrPage as WorkspaceCompanyQrPage } from './pages/company/CompanyQrPage';
+import { SchoolAcademicHubPage } from './pages/school/SchoolAcademicHubPage';
 
 // Protected Route Guard
 const ProtectedRoute: React.FC<{
@@ -841,6 +842,46 @@ export default function App() {
               <ProtectedRoute allowedRoles={['OWNER', 'ADMIN', 'SUB_ADMIN']}>
                 <DashboardLayout>
                   <CompanyHubPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/company/:id/academic"
+            element={
+              <ProtectedRoute allowedRoles={['OWNER', 'ADMIN', 'SUB_ADMIN']}>
+                <DashboardLayout>
+                  <SchoolAcademicHubPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/company/:id/marklist"
+            element={
+              <ProtectedRoute allowedRoles={['OWNER', 'ADMIN', 'SUB_ADMIN']}>
+                <DashboardLayout>
+                  <SchoolAcademicHubPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/school/:id"
+            element={
+              <ProtectedRoute allowedRoles={['OWNER', 'ADMIN', 'SUB_ADMIN']}>
+                <DashboardLayout>
+                  <SchoolAcademicHubPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/school/:id/academic"
+            element={
+              <ProtectedRoute allowedRoles={['OWNER', 'ADMIN', 'SUB_ADMIN']}>
+                <DashboardLayout>
+                  <SchoolAcademicHubPage />
                 </DashboardLayout>
               </ProtectedRoute>
             }

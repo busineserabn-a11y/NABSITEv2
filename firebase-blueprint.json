@@ -147,6 +147,95 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "type", "timestamp"]
+    },
+    "AcademicYear": {
+      "title": "AcademicYear",
+      "description": "School academic year definition using Ethiopian or Gregorian calendar",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 64 },
+        "calendarType": { "type": "string", "enum": ["ETHIOPIAN", "GREGORIAN"] },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "companyId", "name", "isActive"]
+    },
+    "Grade": {
+      "title": "Grade",
+      "description": "School grade level",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 64 },
+        "level": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "companyId", "name"]
+    },
+    "Section": {
+      "title": "Section",
+      "description": "Classroom section under a specific grade",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "gradeId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "companyId", "gradeId", "name"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "Curriculum subject assigned to grades and sections",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "maxScore": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "companyId", "name"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student directory profile with unique identifier",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "fullName": { "type": "string", "maxLength": 128 },
+        "admissionNo": { "type": "string", "maxLength": 64 },
+        "gradeId": { "type": "string", "maxLength": 128 },
+        "sectionId": { "type": "string", "maxLength": 128 },
+        "academicYearId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["active", "graduated", "transferred", "inactive"] }
+      },
+      "required": ["id", "companyId", "fullName", "admissionNo", "gradeId", "sectionId"]
+    },
+    "Marklist": {
+      "title": "Marklist",
+      "description": "Assessment mark sheet by academic year, grade, section, and subject",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "academicYearId": { "type": "string", "maxLength": 128 },
+        "gradeId": { "type": "string", "maxLength": 128 },
+        "sectionId": { "type": "string", "maxLength": 128 },
+        "subjectId": { "type": "string", "maxLength": 128 },
+        "maxScore": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "submitted", "published"] }
+      },
+      "required": ["id", "companyId", "academicYearId", "gradeId", "sectionId", "subjectId"]
     }
   },
   "firestore": {
@@ -185,6 +274,30 @@
     "/analyticsEvents/{eventId}": {
       "schema": "AnalyticsEvent",
       "description": "Real analytics events and metrics"
+    },
+    "/academicYears/{yearId}": {
+      "schema": "AcademicYear",
+      "description": "School academic years and calendar configuration"
+    },
+    "/grades/{gradeId}": {
+      "schema": "Grade",
+      "description": "School grades"
+    },
+    "/sections/{sectionId}": {
+      "schema": "Section",
+      "description": "Class sections linked to grades"
+    },
+    "/subjects/{subjectId}": {
+      "schema": "Subject",
+      "description": "Subjects mapped to grades and sections"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "School student roster"
+    },
+    "/marklists/{marklistId}": {
+      "schema": "Marklist",
+      "description": "Student marks and scores per class and subject"
     },
     "/settings/{settingDoc}": {
       "schema": { "$ref": "PlatformSettings" },

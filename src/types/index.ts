@@ -888,3 +888,133 @@ export interface CategoryDesignProfile {
   };
 }
 
+// ===========================================================================
+// School Academic Module Types (V1 Core Features)
+// ===========================================================================
+
+export interface AcademicYear {
+  id: string;
+  companyId: string;
+  name: string; // e.g. "2016 E.C.", "2017 E.C."
+  calendarType: 'ETHIOPIAN' | 'GREGORIAN';
+  startDate?: string;
+  endDate?: string;
+  isActive: boolean;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Grade {
+  id: string;
+  companyId: string;
+  name: string; // e.g. "Grade 9", "Grade 10"
+  level: number; // 9, 10, 11, 12
+  academicYearId?: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Section {
+  id: string;
+  companyId: string;
+  gradeId: string; // Parent grade reference (mandatory)
+  name: string; // e.g. "Section A", "Section B"
+  room?: string;
+  capacity?: number;
+  academicYearId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Subject {
+  id: string;
+  companyId: string;
+  name: string; // e.g. "Mathematics", "English", "Afan Oromo", "Arabic"
+  code?: string;
+  gradeIds: string[]; // List of Grade IDs this subject applies to
+  sectionIds?: string[];
+  maxScore: number; // Default 100
+  isCommon: boolean;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Student {
+  id: string; // Long Unique ID e.g. "GG_STU_2016_A98F12C"
+  companyId: string;
+  fullName: string;
+  admissionNo: string; // Roll / Reg number e.g. "GG/2016/041"
+  gender?: 'male' | 'female' | 'other';
+  dateOfBirth?: string;
+  gradeId: string;
+  sectionId: string;
+  academicYearId: string;
+  status: 'active' | 'graduated' | 'transferred' | 'inactive';
+  guardianName?: string;
+  guardianPhone?: string;
+  guardianEmail?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudentScore {
+  studentId: string;
+  studentName: string;
+  admissionNo: string;
+  score: number | null; // null for empty/not entered, 0 for zero score, 0..maxScore for numerical score
+  notes?: string;
+  updatedAt?: string;
+}
+
+export type MarklistEntry = StudentScore;
+
+export interface Marklist {
+  id: string;
+  companyId: string;
+  academicYearId: string;
+  gradeId: string;
+  sectionId: string;
+  subjectId: string;
+  maxScore: number;
+  entries: StudentScore[];
+  status: 'draft' | 'submitted' | 'published';
+  lastUpdatedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SchoolDashboardStats {
+  gradesCount: number;
+  sectionsCount: number;
+  subjectsCount: number;
+  studentsCount: number;
+  activeAcademicYear: AcademicYear | null;
+  recentAnnouncementsCount: number;
+  savedMarklistsCount: number;
+  recentMarklists: Array<{
+    id: string;
+    gradeName: string;
+    sectionName: string;
+    subjectName: string;
+    academicYearName: string;
+    filledCount: number;
+    totalCount: number;
+    updatedAt: string;
+  }>;
+}
+
+export interface SchoolSearchResult {
+  type: 'student' | 'grade' | 'section' | 'subject' | 'announcement';
+  id: string;
+  title: string;
+  subtitle: string;
+  badge?: string;
+  details?: Record<string, any>;
+  linkTab?: string;
+}
+
+

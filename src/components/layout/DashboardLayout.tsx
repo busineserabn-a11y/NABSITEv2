@@ -38,6 +38,8 @@ import {
   ChevronRight,
   FolderTree,
   Terminal,
+  GraduationCap,
+  FileCheck2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
@@ -169,12 +171,33 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
             { label: 'Universal QR Studio', href: '/owner/qr', icon: QrCode },
             { label: 'Active Studio', href: `/studio/${activeCompany?.id || ''}`, icon: Globe },
             { label: 'Company Workstation', href: `/company/${selectedCompanyId || ''}`, icon: Store },
+            { label: 'School Academic Hub', href: `/company/${selectedCompanyId || ''}/academic`, icon: GraduationCap },
           ],
         },
       ];
     }
 
     if (user.role === 'ADMIN') {
+      const isSchool = activeCompany?.category === 'Schools';
+      const companyHubItems: NavItem[] = [
+        { label: 'Overview & Info', href: `/company/${selectedCompanyId || ''}`, icon: Store },
+        { label: 'Website Studio', href: `/studio/${activeCompany?.id || ''}`, icon: Globe },
+      ];
+
+      if (isSchool) {
+        companyHubItems.push(
+          { label: 'School Academic Hub', href: `/company/${selectedCompanyId || ''}/academic`, icon: GraduationCap },
+          { label: 'Student Marklists', href: `/company/${selectedCompanyId || ''}/marklist`, icon: FileCheck2 }
+        );
+      }
+
+      companyHubItems.push(
+        { label: 'Products & Store', href: `/company/${selectedCompanyId || ''}/products`, icon: Store },
+        { label: 'Reviews & Feedback', href: `/company/${selectedCompanyId || ''}/reviews`, icon: MessageSquare },
+        { label: 'Offers & Updates', href: `/company/${selectedCompanyId || ''}/offers`, icon: Megaphone },
+        { label: 'QR & Digital Stand', href: `/company/${selectedCompanyId || ''}/qr`, icon: QrCode }
+      );
+
       return [
         {
           section: 'Admin Workspace',
@@ -188,14 +211,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         },
         {
           section: 'Active Company Hub',
-          items: [
-            { label: 'Overview & Info', href: `/company/${selectedCompanyId || ''}`, icon: Store },
-            { label: 'Website Studio', href: `/studio/${activeCompany?.id || ''}`, icon: Globe },
-            { label: 'Products & Store', href: `/company/${selectedCompanyId || ''}/products`, icon: Store },
-            { label: 'Reviews & Feedback', href: `/company/${selectedCompanyId || ''}/reviews`, icon: MessageSquare },
-            { label: 'Offers & Updates', href: `/company/${selectedCompanyId || ''}/offers`, icon: Megaphone },
-            { label: 'QR & Digital Stand', href: `/company/${selectedCompanyId || ''}/qr`, icon: QrCode },
-          ],
+          items: companyHubItems,
         },
       ];
     }
@@ -204,6 +220,19 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     const subAdminItems: NavItem[] = [
       { label: 'Company Overview', href: `/company/${user.assignedCompanyId || ''}`, icon: Store },
     ];
+
+    if (activeCompany?.category === 'Schools' || user.assignedCompanyId?.startsWith('sch_')) {
+      subAdminItems.push({
+        label: 'Academic Workstation',
+        href: `/company/${user.assignedCompanyId || ''}/academic`,
+        icon: GraduationCap,
+      });
+      subAdminItems.push({
+        label: 'Student Marklists',
+        href: `/company/${user.assignedCompanyId || ''}/marklist`,
+        icon: FileCheck2,
+      });
+    }
 
     if (hasPermission('edit_website')) {
       subAdminItems.push({ label: 'Website Studio', href: `/studio/${user.assignedCompanyId || ''}`, icon: Globe });
