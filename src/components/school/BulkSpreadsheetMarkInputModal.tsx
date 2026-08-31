@@ -13,6 +13,11 @@ import {
   Save,
   HelpCircle,
   Table,
+  Sliders,
+  Percent,
+  Plus,
+  Trash2,
+  Check,
 } from 'lucide-react';
 import {
   AcademicYear,
@@ -29,6 +34,7 @@ import { Badge } from '../ui/Badge';
 import {
   parseSpreadsheetPastedText,
   computeStudentSubjectResult,
+  validateAssessmentComponentsTotal,
 } from '../../lib/academicUtils';
 
 interface BulkSpreadsheetMarkInputModalProps {
@@ -78,6 +84,11 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
   // Target assessment component mode: 'ALL_COMPONENTS' or specific component ID or 'FINAL_SCORE'
   const [selectedComponentId, setSelectedComponentId] = useState<string>('ALL_COMPONENTS');
 
+  // Weight editor state
+  const [showWeightAdjuster, setShowWeightAdjuster] = useState<boolean>(false);
+  const [localComponents, setLocalComponents] = useState<AssessmentComponent[]>([]);
+  const [savingWeights, setSavingWeights] = useState<boolean>(false);
+
   // Paste raw text buffer & parsing
   const [pasteBuffer, setPasteBuffer] = useState<string>('');
   const [pasteMode, setPasteMode] = useState<'SCORE_ONLY' | 'NAME_AND_SCORE'>('SCORE_ONLY');
@@ -126,7 +137,125 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
   const currentGrade = grades.find((g) => g.id === selectedGradeId);
   const currentSection = sections.find((s) => s.id === selectedSectionId);
   const currentYear = academicYears.find((y) => y.id === selectedYearId);
-  const components: AssessmentComponent[] = currentSubject?.assessmentComponents || [];
+
+  // Sync local components with current subject
+  useEffect(() => {
+    if (currentSubject?.assessmentComponents && currentSubject.assessmentComponents.length > 0) {
+      setLocalComponents(currentSubject.assessmentComponents);
+    } else {
+      setLocalComponents([
+        { id: 'comp_assign_1', name: 'Assignment 1', weight: 10, maxScore: 20 },
+        { id: 'comp_quiz_1', name: 'Quiz 1', weight: 10, maxScore: 20 },
+        { id: 'comp_test_1', name: 'Test 1', weight: 20, maxScore: 50 },
+        { id: 'comp_mid_1', name: 'Midterm Exam', weight: 20, maxScore: 50 },
+        { id: 'comp_final_1', name: 'Final Exam', weight: 40, maxScore: 100 },
+      ]);
+    }
+  }, [currentSubject?.id, currentSubject?.assessmentComponents]);
+
+  const components: AssessmentComponent[] = localComponents;
+  const totalWeight = useMemo(() => {
+    return components.reduce((sum, c) => sum + (Number(c.weight) || 0), 0);
+  }, [components]);
+
+  // Handle Weight Presets
+  const applyPresetWeights = (type: 'STANDARD' | 'CONTINUOUS_5_10_15' | 'EQUAL_20' | 'SPLIT_50_50') => {
+    let nextComps: AssessmentComponent[] = [];
+    if (type === 'STANDARD') {
+      nextComps = [
+        { id: 'comp_assign_1', name: 'Assignment 1', weight: 10, maxScore: 20 },
+        { id: 'comp_quiz_1', name: 'Quiz 1', weight: 10, maxScore: 20 },
+        { id: 'comp_test_1', name: 'Test 1', weight: 20, maxScore: 50 },
+        { id: 'comp_mid_1', name: 'Midterm Exam', weight: 20, maxScore: 50 },
+        { id: 'comp_final_1', name: 'Final Exam', weight: 40, maxScore: 100 },
+      ];
+    } else if (type === 'CONTINUOUS_5_10_15') {
+      nextComps = [
+        { id: 'comp_quiz_1', name: 'Quiz 1', weight: 5, maxScore: 10 },
+        { id: 'comp_quiz_2', name: 'Quiz 2', weight: 5, maxScore: 10 },
+        { id: 'comp_assign_1', name: 'Assignment', weight: 10, maxScore: 20 },
+        { id: 'comp_proj_1', name: 'Project / Practical', weight: 15, maxScore: 30 },
+        { id: 'comp_mid_1', name: 'Midterm Exam', weight: 25, maxScore: 50 },
+        { id: 'comp_final_1', name: 'Final Exam', weight: 40, maxScore: 100 },
+      ];
+    } else if (type === 'EQUAL_20') {
+      nextComps = [
+        { id: 'comp_quiz', name: 'Quizzes', weight: 20, maxScore: 20 },
+        { id: 'comp_hw', name: 'Homework & Assignment', weight: 20, maxScore: 20 },
+        { id: 'comp_proj', name: 'Projects & Labs', weight: 20, maxScore: 20 },
+        { id: 'comp_mid', name: 'Midterm Exam', weight: 20, maxScore: 50 },
+        { id: 'comp_final', name: 'Final Exam', weight: 20, maxScore: 100 },
+      ];
+    } else if (type === 'SPLIT_50_50') {
+      nextComps = [
+        { id: 'comp_cont', name: 'Continuous Assessments', weight: 50, maxScore: 100 },
+        { id: 'comp_final', name: 'Final Exam', weight: 50, maxScore: 100 },
+      ];
+    }
+
+    setLocalComponents(nextComps);
+    recalculateEntriesWithComponents(nextComps);
+    setFeedback({
+      type: 'success',
+      message: `Applied ${type} weight preset! Click "Save Weights to Subject" to permanently link these weights.`,
+    });
+  };
+
+  // Adjust weight of a single component
+  const handleSetComponentWeight = (compId: string, newWeight: number) => {
+    const nextComps = localComponents.map((c) => (c.id === compId ? { ...c, weight: Math.max(0, Math.min(100, newWeight)) } : c));
+    setLocalComponents(nextComps);
+    recalculateEntriesWithComponents(nextComps);
+  };
+
+  // Recalculate all loaded student entries with updated component structure/weights
+  const recalculateEntriesWithComponents = (comps: AssessmentComponent[]) => {
+    if (!currentSubject) return;
+    const dummySubject: Subject = {
+      ...currentSubject,
+      assessmentComponents: comps,
+    };
+
+    setEntries((prev) =>
+      prev.map((entry) => {
+        const result = computeStudentSubjectResult(entry.componentScores || {}, dummySubject);
+        return {
+          ...entry,
+          score: result.finalPercentage !== null ? result.finalPercentage : entry.score,
+          weightedTotal: result.finalPercentage,
+        };
+      })
+    );
+  };
+
+  // Save adjusted weights permanently to the subject in database
+  const handleSaveWeightsToSubject = async () => {
+    if (!currentSubject) return;
+    if (totalWeight !== 100) {
+      if (!window.confirm(`Notice: Total component weights sum to ${totalWeight}%, not 100%. Do you still wish to apply these weights?`)) {
+        return;
+      }
+    }
+    setSavingWeights(true);
+    try {
+      await api.updateSubject(currentSubject.id, {
+        companyId: company.id,
+        assessmentComponents: localComponents,
+      });
+      if (currentSubject) {
+        currentSubject.assessmentComponents = localComponents;
+      }
+      setFeedback({
+        type: 'success',
+        message: `Successfully saved ${localComponents.length} assessment component weights to ${currentSubject.name}! All student percentages recalculated.`,
+      });
+    } catch (err: any) {
+      console.error('Failed to save subject components:', err);
+      setFeedback({ type: 'error', message: 'Failed to save assessment weights to subject.' });
+    } finally {
+      setSavingWeights(false);
+    }
+  };
 
   // Fetch marklist when filters change
   const fetchRoster = async () => {
@@ -485,7 +614,7 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
           </div>
         </div>
 
-        {/* Fast Action Paste Drawer Toggle */}
+        {/* Fast Action Toolbar & Weight Adjuster Toggle */}
         <div className="px-6 py-3 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-slate-700 dark:text-slate-300">
@@ -495,22 +624,186 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
             <span className="text-sky-600 dark:text-sky-400 font-semibold">
               {currentGrade?.name} — {currentSection?.name} ({currentSubject?.name})
             </span>
+            <span>•</span>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] ${
+              totalWeight === 100
+                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+            }`}>
+              <Percent className="w-3 h-3" />
+              <span>Weight Sum: {totalWeight}% {totalWeight === 100 ? '✓ Balanced' : '(Target: 100%)'}</span>
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setShowWeightAdjuster(!showWeightAdjuster)}
+              className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors ${
+                showWeightAdjuster
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-amber-500'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>{showWeightAdjuster ? 'Hide Weight Adjuster' : 'Adjust Assessment Weights (% 5, 10, 20...)'}</span>
+            </button>
+
             <button
               onClick={() => setShowPasteBox(!showPasteBox)}
               className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors ${
                 showPasteBox
-                  ? 'bg-sky-600 text-white'
+                  ? 'bg-sky-600 text-white shadow-xs'
                   : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-sky-500'
               }`}
             >
               <Upload className="w-3.5 h-3.5" />
-              {showPasteBox ? 'Hide Paste Box' : 'Paste Column from Spreadsheet'}
+              <span>{showPasteBox ? 'Hide Paste Box' : 'Paste Column from Excel'}</span>
             </button>
           </div>
         </div>
+
+        {/* Assessment Weight Adjuster Drawer */}
+        {showWeightAdjuster && (
+          <div className="p-4 sm:p-6 bg-amber-500/5 dark:bg-amber-950/20 border-b border-amber-500/20 space-y-4 shrink-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-amber-500" />
+                  <span>Adjust Assessment Breakdown Weights for {currentSubject?.name}</span>
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Set continuous assessment weights (5%, 10%, 15%, 20%, 40%, etc.). The table and Student Portal dynamically sum up to 100%.
+                </p>
+              </div>
+
+              {/* Quick Presets */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-bold text-slate-500 uppercase mr-1">Presets:</span>
+                <button
+                  type="button"
+                  onClick={() => applyPresetWeights('STANDARD')}
+                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:border-amber-400"
+                >
+                  Standard 10-10-20-20-40
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPresetWeights('CONTINUOUS_5_10_15')}
+                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:border-amber-400"
+                >
+                  Continuous 5-5-10-15-25-40
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPresetWeights('SPLIT_50_50')}
+                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:border-amber-400"
+                >
+                  50/50 Split
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPresetWeights('EQUAL_20')}
+                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:border-amber-400"
+                >
+                  Equal 20% x 5
+                </button>
+              </div>
+            </div>
+
+            {/* Individual Component Weight Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
+              {localComponents.map((comp, idx) => (
+                <div
+                  key={comp.id}
+                  className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2 shadow-xs"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                      {comp.name}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 font-extrabold text-xs">
+                      {comp.weight}%
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                    <span>Max: {comp.maxScore} pts</span>
+                  </div>
+
+                  {/* Quick percentage adjustment buttons */}
+                  <div className="flex items-center gap-1 flex-wrap pt-1">
+                    {[5, 10, 15, 20, 25, 40, 50].map((w) => (
+                      <button
+                        key={w}
+                        type="button"
+                        onClick={() => handleSetComponentWeight(comp.id, w)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                          comp.weight === w
+                            ? 'bg-amber-500 text-slate-950 font-black'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        {w}%
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Increment / Decrement Stepper */}
+                  <div className="flex items-center gap-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSetComponentWeight(comp.id, Math.max(0, comp.weight - 5))}
+                      className="flex-1 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-xs text-slate-700 dark:text-slate-300"
+                    >
+                      -5%
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetComponentWeight(comp.id, Math.min(100, comp.weight + 5))}
+                      className="flex-1 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-xs text-slate-700 dark:text-slate-300"
+                    >
+                      +5%
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Bottom Actions for Weight Adjuster */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-amber-500/20">
+              <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                <span className="font-semibold">Calculated Total Weight:</span>
+                <span className={`font-black text-sm ${totalWeight === 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                  {totalWeight}% / 100%
+                </span>
+                {totalWeight !== 100 && (
+                  <span className="text-amber-600 text-[11px]">
+                    (Recommended: adjust component weights so the total equals 100%)
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowWeightAdjuster(false)}
+                >
+                  Done Adjusting
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={Save}
+                  onClick={handleSaveWeightsToSubject}
+                  disabled={savingWeights}
+                >
+                  {savingWeights ? 'Saving Weights...' : 'Save & Link Weights to Subject'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Paste from Excel / Spreadsheet Box */}
         {showPasteBox && (

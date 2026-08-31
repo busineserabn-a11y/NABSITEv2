@@ -81,11 +81,11 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
     setEditingStudent(null);
     const initialGradeId = grades[0]?.id || '';
     const initialSections = sections.filter((s) => s.gradeId === initialGradeId);
-    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
 
     setFormData({
       fullName: '',
-      admissionNo: `ADM/${new Date().getFullYear()}/${randomSuffix}`,
+      admissionNo: `FAN-${new Date().getFullYear()}-${randomSuffix}`,
       gender: 'male',
       dateOfBirth: '',
       gradeId: initialGradeId,
@@ -435,16 +435,29 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
-                    Admission No
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[11px]">
+                      FAN / Admission No. *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, admissionNo: `FAN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}` })}
+                      className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold hover:underline"
+                    >
+                      Generate FAN
+                    </button>
+                  </div>
                   <input
                     type="text"
-                    placeholder="ADM/2025/..."
+                    required
+                    placeholder="e.g. FAN-2025-4821"
                     value={formData.admissionNo}
                     onChange={(e) => setFormData({ ...formData, admissionNo: e.target.value })}
-                    className="w-full h-11 px-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-mono font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full h-11 px-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Permanent student ID required to access results on "About the Student" portal.
+                  </p>
                 </div>
               </div>
 

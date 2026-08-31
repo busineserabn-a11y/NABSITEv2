@@ -132,11 +132,22 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
     bodyFont: theme.typography.bodyFont,
   };
 
+  const [internalSlug, setInternalSlug] = useState<string>(activePageSlug || 'home');
+
+  useEffect(() => {
+    if (activePageSlug) {
+      setInternalSlug(activePageSlug);
+    }
+  }, [activePageSlug]);
+
+  const currentSlug = (activePageSlug || internalSlug || 'home').toLowerCase();
+
   const pages = config?.pages || [
     { id: 'page_home', name: 'Home', slug: 'home', title: 'Home', isHome: true, isPublished: true, isHidden: false, order: 1, sections: [] },
   ];
 
-  const activePage = pages.find((p) => p.slug === activePageSlug) || pages.find((p) => p.isHome) || pages[0];
+  const matchingCustomPage = pages.find((p) => p.slug?.toLowerCase() === currentSlug && p.slug?.toLowerCase() !== 'home');
+  const activePage = matchingCustomPage || pages.find((p) => p.isHome) || pages[0];
 
   // Helper for Open/Closed status
   const isCurrentlyOpen = (): boolean => {
@@ -190,6 +201,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
     : '5.0';
 
   const handlePageClick = (slug: string) => {
+    setInternalSlug(slug);
     if (onNavigatePage) {
       onNavigatePage(slug);
     }
@@ -1736,17 +1748,19 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
   // -------------------------------------------------------------
   // RENDER SECTIONS ACCORDING TO ACTIVE PAGE
   // -------------------------------------------------------------
-  const isPageMenu = activePageSlug === 'menu';
-  const isPageStore = activePageSlug === 'store' || activePageSlug === 'products' || activePageSlug === 'programs';
-  const isPageContact = activePageSlug === 'contact';
-  const isPageReviews = activePageSlug === 'reviews';
-  const isPageOffers = activePageSlug === 'offers';
-  const isPageAbout = activePageSlug === 'about';
+  const isPageMenu = currentSlug === 'menu';
+  const isPageStore = currentSlug === 'store' || currentSlug === 'products' || currentSlug === 'programs';
+  const isPageContact = currentSlug === 'contact';
+  const isPageReviews = currentSlug === 'reviews';
+  const isPageOffers = currentSlug === 'offers';
+  const isPageAbout = currentSlug === 'about' || currentSlug === 'school-info' || currentSlug === 'about-us' || currentSlug === 'info';
+  const isPageAnnouncements = currentSlug === 'announcements' || currentSlug === 'news' || currentSlug === 'beeksisa';
   const isPageStudent =
-    activePageSlug === 'student' ||
-    activePageSlug === 'student-portal' ||
-    activePageSlug === 'student-lookup' ||
-    activePageSlug === 'about-student';
+    currentSlug === 'student' ||
+    currentSlug === 'student-portal' ||
+    currentSlug === 'student-lookup' ||
+    currentSlug === 'about-student' ||
+    currentSlug === 'results';
 
   return (
     <div
@@ -1777,9 +1791,9 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 <QrCode className="w-3.5 h-3.5" />
                 <span>QR Stand</span>
               </Link>
-              <Link to="/" className="text-slate-400 hover:text-white text-xs hidden sm:inline">
-                Platform Directory
-              </Link>
+              <span className="text-slate-400 text-xs hidden sm:inline">
+                Campus Portal Active
+              </span>
             </div>
           </div>
         </div>
@@ -1821,7 +1835,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
               <button
                 onClick={() => handlePageClick('home')}
                 className={`px-3 py-2 rounded-lg transition-colors ${
-                  activePageSlug === 'home' || !activePageSlug ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
+                  currentSlug === 'home' || !currentSlug ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 Home
@@ -1830,7 +1844,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
               <button
                 onClick={() => handlePageClick('about')}
                 className={`px-3 py-2 rounded-lg transition-colors ${
-                  activePageSlug === 'about' ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
+                  isPageAbout ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 {isSchool ? '🏫 School Info' : 'About Us'}
@@ -1852,7 +1866,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 <button
                   onClick={() => handlePageClick('announcements')}
                   className={`px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
-                    activePageSlug === 'announcements' ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
+                    isPageAnnouncements ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   <Megaphone className="w-3.5 h-3.5 text-amber-500" />
@@ -1864,7 +1878,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 <button
                   onClick={() => handlePageClick('menu')}
                   className={`px-3 py-2 rounded-lg transition-colors ${
-                    activePageSlug === 'menu' || activePageSlug === 'store' || activePageSlug === 'products' ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
+                    isPageMenu || isPageStore ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   {isSchool ? 'Programs & Resources' : 'Digital Menu / Store'}
@@ -1875,7 +1889,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 <button
                   onClick={() => handlePageClick('reviews')}
                   className={`px-3 py-2 rounded-lg transition-colors ${
-                    activePageSlug === 'reviews' ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
+                    isPageReviews ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   Reviews ({reviews.length})
@@ -1886,7 +1900,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 <button
                   onClick={() => handlePageClick('offers')}
                   className={`px-3 py-2 rounded-lg transition-colors ${
-                    activePageSlug === 'offers' ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
+                    isPageOffers ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   Special Offers
@@ -1896,7 +1910,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
               <button
                 onClick={() => handlePageClick('contact')}
                 className={`px-3 py-2 rounded-lg transition-colors ${
-                  activePageSlug === 'contact' ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
+                  isPageContact ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 Contact & Location
@@ -2080,9 +2094,40 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
           <SchoolStudentPortalView company={company} onNavigatePage={handlePageClick} />
           {renderSectionContainer('contact', renderContactSection())}
         </div>
-      ) : activePage?.sections && activePage.sections.length > 0 && activePageSlug !== 'home' ? (
+      ) : isPageAbout ? (
+        <div className="space-y-12">
+          {renderAboutPage()}
+          {renderSectionContainer('contact', renderContactSection())}
+        </div>
+      ) : isPageAnnouncements ? (
+        <div className="space-y-12">
+          {renderAnnouncementsPage()}
+          {renderSectionContainer('contact', renderContactSection())}
+        </div>
+      ) : isPageMenu || isPageStore ? (
+        <div className="space-y-12">
+          {renderSectionContainer('store', renderProductsSection())}
+          {renderSectionContainer('contact', renderContactSection())}
+        </div>
+      ) : isPageReviews ? (
+        <div className="space-y-12">
+          {renderSectionContainer('reviews', renderReviewsSection())}
+          {renderSectionContainer('contact', renderContactSection())}
+        </div>
+      ) : isPageOffers ? (
+        <div className="space-y-12">
+          {renderSectionContainer('promos', renderPromosBanner())}
+          {renderAnnouncementsPage()}
+          {renderSectionContainer('contact', renderContactSection())}
+        </div>
+      ) : isPageContact ? (
+        <div className="space-y-12">
+          {renderSectionContainer('contact', renderContactSection())}
+          {renderSectionContainer('hours', renderScheduleLocationSection())}
+        </div>
+      ) : matchingCustomPage?.sections && matchingCustomPage.sections.length > 0 ? (
         <main className="space-y-12">
-          {activePage.sections
+          {matchingCustomPage.sections
             .filter((sec) => sec.isVisible !== false)
             .sort((a, b) => (a.order || 0) - (b.order || 0))
             .map((sec) => {
@@ -2123,32 +2168,6 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
               }
             })}
         </main>
-      ) : isPageAbout ? (
-        <div className="space-y-12">
-          {renderAboutPage()}
-          {renderSectionContainer('contact', renderContactSection())}
-        </div>
-      ) : activePageSlug === 'announcements' ? (
-        <div className="space-y-12">
-          {renderAnnouncementsPage()}
-          {renderSectionContainer('contact', renderContactSection())}
-        </div>
-      ) : isPageMenu || isPageStore ? (
-        <div className="space-y-12">
-          {renderSectionContainer('store', renderProductsSection())}
-          {renderSectionContainer('contact', renderContactSection())}
-        </div>
-      ) : isPageReviews ? (
-        <div className="space-y-12">
-          {renderSectionContainer('reviews', renderReviewsSection())}
-          {renderSectionContainer('contact', renderContactSection())}
-        </div>
-      ) : isPageOffers ? (
-        <div className="space-y-12">
-          {renderSectionContainer('promos', renderPromosBanner())}
-          {renderAnnouncementsPage()}
-          {renderSectionContainer('contact', renderContactSection())}
-        </div>
       ) : isPageContact ? (
         <div className="space-y-12">
           {renderSectionContainer('contact', renderContactSection())}
