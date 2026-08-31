@@ -21,6 +21,10 @@ import {
   FileText,
   RotateCcw,
   Zap,
+  Search,
+  ChevronDown,
+  ArrowDown,
+  CheckCheck,
 } from 'lucide-react';
 import {
   AcademicYear,
@@ -87,6 +91,12 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
 
   // Target assessment component mode: 'ALL_COMPONENTS' or specific component ID or 'FINAL_SCORE'
   const [selectedComponentId, setSelectedComponentId] = useState<string>('ALL_COMPONENTS');
+
+  // Search & Filter students
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Column quick menu popover state
+  const [openColumnMenuId, setOpenColumnMenuId] = useState<string | null>(null);
 
   // Weight editor state
   const [showWeightAdjuster, setShowWeightAdjuster] = useState<boolean>(false);
@@ -338,6 +348,164 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
           : entry
       )
     );
+  };
+
+  // Quick Batch Fill for a specific Assessment Component column
+  const handleBatchFillColumn = (compId: string, value: number, isPercentOfMax: boolean = false) => {
+    const comp = components.find((c) => c.id === compId);
+    const max = comp?.maxScore || 100;
+    const finalScore = isPercentOfMax ? Number(((value / 100) * max).toFixed(1)) : Math.min(max, Math.max(0, value));
+
+    setEntries((prev) =>
+      prev.map((entry) => {
+        if (compId === 'FINAL_SCORE' || components.length === 0) {
+          const clamped = isPercentOfMax ? value : Math.min(100, Math.max(0, value));
+          return { ...entry, score: clamped, weightedTotal: clamped };
+        }
+        const nextCompScores = {
+          ...(entry.componentScores || {}),
+          [compId]: finalScore,
+        };
+        const result = computeStudentSubjectResult(nextCompScores, currentSubject || null);
+        return {
+          ...entry,
+          componentScores: nextCompScores,
+          score: result.finalPercentage !== null ? result.finalPercentage : entry.score,
+          weightedTotal: result.finalPercentage,
+        };
+      })
+    );
+
+    setFeedback({
+      type: 'success',
+      message: `Assigned ${finalScore}${comp ? ` / ${max}` : ''} to all students for ${comp ? comp.name : 'Final Score'}!`,
+    });
+    setOpenColumnMenuId(null);
+  };
+
+  // Clear a specific column for all students
+  const handleClearColumn = (compId: string) => {
+    const comp = components.find((c) => c.id === compId);
+    setEntries((prev) =>
+      prev.map((entry) => {
+        if (compId === 'FINAL_SCORE' || components.length === 0) {
+          return { ...entry, score: null, weightedTotal: null };
+        }
+        const nextCompScores = { ...(entry.componentScores || {}) };
+        delete nextCompScores[compId];
+        const result = computeStudentSubjectResult(nextCompScores, currentSubject || null);
+        return {
+          ...entry,
+          componentScores: nextCompScores,
+          score: result.finalPercentage !== null ? result.finalPercentage : entry.score,
+          weightedTotal: result.finalPercentage,
+        };
+      })
+    );
+    setFeedback({
+      type: 'success',
+      message: `Cleared marks for ${comp ? comp.name : 'Final Score'} across all students.`,
+    });
+    setOpenColumnMenuId(null);
+  };
+
+  // Direct paste into any single cell - populates down from that row!
+  const handleCellPaste = (
+    e: React.ClipboardEvent<HTMLInputElement>,
+    startStudentId: string,
+    compId: string
+  ) => {
+    const text = e.clipboardData.getData('text');
+    if (!text || (!text.includes('\n') && !text.includes('\t') && !text.includes(','))) {
+      return; // let standard single-value paste happen
+    }
+    e.preventDefault();
+
+    const parsedRows = parseSpreadsheetPastedText(text);
+    if (parsedRows.length === 0) return;
+
+    const comp = components.find((c) => c.id === compId);
+    const max = comp?.maxScore || 100;
+
+    const startIdx = entries.findIndex((s) => s.studentId === startStudentId);
+    if (startIdx === -1) return;
+
+    let appliedCount = 0;
+    setEntries((prev) => {
+      const next = [...prev];
+      for (let i = 0; i < parsedRows.length && startIdx + i < next.length; i++) {
+        const row = parsedRows[i];
+        if (!row || row.length === 0) continue;
+        const cellRaw = row[0];
+        const num = parseFloat(cellRaw.replace(/[^0-9.-]/g, ''));
+        if (!isNaN(num)) {
+          const clamped = Math.max(0, Math.min(max, num));
+          const targetStudent = next[startIdx + i];
+
+          if (compId === 'FINAL_SCORE' || components.length === 0) {
+            next[startIdx + i] = {
+              ...targetStudent,
+              score: clamped,
+              weightedTotal: clamped,
+            };
+          } else {
+            const nextComps = {
+              ...(targetStudent.componentScores || {}),
+              [compId]: clamped,
+            };
+            const result = computeStudentSubjectResult(nextComps, currentSubject || null);
+            next[startIdx + i] = {
+              ...targetStudent,
+              componentScores: nextComps,
+              score: result.finalPercentage !== null ? result.finalPercentage : targetStudent.score,
+              weightedTotal: result.finalPercentage,
+            };
+          }
+          appliedCount++;
+        }
+      }
+      return next;
+    });
+
+    setFeedback({
+      type: 'success',
+      message: `Pasted ${appliedCount} marks starting from row ${startIdx + 1}!`,
+    });
+  };
+
+  // Keyboard navigation across cells (Enter / ArrowDown / ArrowUp / Tab)
+  const handleCellKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    rowIdx: number,
+    colIdx: number,
+    totalRows: number,
+    totalCols: number
+  ) => {
+    let nextRow = rowIdx;
+    let nextCol = colIdx;
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      nextRow = e.shiftKey ? Math.max(0, rowIdx - 1) : Math.min(totalRows - 1, rowIdx + 1);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      nextRow = Math.min(totalRows - 1, rowIdx + 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      nextRow = Math.max(0, rowIdx - 1);
+    } else if (e.key === 'Tab') {
+      // let standard tab handle or custom column wrap
+      return;
+    } else {
+      return;
+    }
+
+    const nextCellId = `cell-input-${nextRow}-${nextCol}`;
+    const nextElem = document.getElementById(nextCellId) as HTMLInputElement | null;
+    if (nextElem) {
+      nextElem.focus();
+      nextElem.select();
+    }
   };
 
   // -------------------------------------------------------------
@@ -789,6 +957,28 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
     }
   };
 
+  // Filter entries based on search query
+  const filteredEntries = useMemo(() => {
+    if (!searchQuery.trim()) return entries;
+    const q = searchQuery.toLowerCase().trim();
+    return entries.filter(
+      (e) =>
+        e.studentName.toLowerCase().includes(q) ||
+        (e.admissionNo && e.admissionNo.toLowerCase().includes(q)) ||
+        e.studentId.toLowerCase().includes(q)
+    );
+  }, [entries, searchQuery]);
+
+  // Total graded count
+  const gradedStudentsCount = useMemo(() => {
+    return entries.filter((e) => {
+      if (components.length > 0) {
+        return Object.keys(e.componentScores || {}).length > 0;
+      }
+      return e.score !== null && e.score !== undefined;
+    }).length;
+  }, [entries, components]);
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-6xl shadow-2xl flex flex-col max-h-[94vh] overflow-hidden">
@@ -812,7 +1002,7 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
                 Spreadsheet-Style Bulk Mark Input Table
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Export template, input marks directly or import CSV/Excel file with weighted continuous calculations.
+                Fast spreadsheet entry: Press <kbd className="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-[10px] font-mono">Enter</kbd> or <kbd className="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-[10px] font-mono">↓</kbd> to move down, paste columns directly, or use column batch tools.
               </p>
             </div>
           </div>
@@ -827,7 +1017,7 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
                 title="Download empty CSV template pre-filled with student names & ID columns"
               >
                 <Download className="w-3.5 h-3.5 text-sky-600" />
-                <span>Export Template (CSV)</span>
+                <span>Export Template</span>
               </button>
 
               <button
@@ -837,7 +1027,7 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
                 title="Download current entered scores with weighted totals"
               >
                 <FileText className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Export Full Marks</span>
+                <span>Export Marks</span>
               </button>
 
               <button
@@ -969,15 +1159,35 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
 
         {/* Input Tools & Fast Action Toolbar */}
         <div className="px-5 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2.5 text-xs">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-slate-800 dark:text-slate-200">
-              Roster: {entries.length} Students
-            </span>
-            <span>•</span>
-            <span className="text-sky-600 dark:text-sky-400 font-semibold">
-              {currentGrade?.name} — {currentSection?.name} ({currentSubject?.name})
-            </span>
-            <span>•</span>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Find student by name or FAN..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-52 h-8 pl-8 pr-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 font-semibold">
+              <span>Progress:</span>
+              <span className="px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 font-bold text-[11px]">
+                {gradedStudentsCount} / {entries.length} Graded
+              </span>
+            </div>
+
             <span
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] ${
                 totalWeight === 100
@@ -986,7 +1196,7 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
               }`}
             >
               <Percent className="w-3 h-3" />
-              <span>Weight Sum: {totalWeight}% {totalWeight === 100 ? '✓ Balanced' : '(Target: 100%)'}</span>
+              <span>Weight: {totalWeight}% {totalWeight === 100 ? '✓ Balanced' : '(Target 100%)'}</span>
             </span>
           </div>
 
@@ -999,7 +1209,7 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
               className="px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-emerald-500 hover:text-emerald-600 shadow-xs transition-colors"
             >
               <Upload className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Upload CSV / Excel File</span>
+              <span>Import CSV / Excel</span>
             </button>
 
             {/* 2. Paste From Excel */}
@@ -1013,10 +1223,10 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
               }`}
             >
               <Copy className="w-3.5 h-3.5" />
-              <span>{showPasteBox ? 'Hide Paste Box' : 'Paste Column from Excel'}</span>
+              <span>{showPasteBox ? 'Hide Paste Box' : 'Paste Column'}</span>
             </button>
 
-            {/* 3. Auto-Fill Sample Marks (1-Click Input) */}
+            {/* 3. Auto-Fill Sample Marks */}
             <button
               type="button"
               onClick={handleAutoFillRealisticMarks}
@@ -1024,7 +1234,7 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
               title="Automatically populate realistic continuous assessment scores (72%-98%) for testing"
             >
               <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Input Sample Marks (Auto-Fill)</span>
+              <span>Fill Realistic Marks</span>
             </button>
 
             {/* 4. Weight Adjuster Toggle */}
@@ -1256,34 +1466,145 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
               <div className="w-8 h-8 border-3 border-sky-500 border-t-transparent rounded-full animate-spin" />
               <p className="text-xs font-medium">Loading spreadsheet table...</p>
             </div>
-          ) : entries.length === 0 ? (
+          ) : filteredEntries.length === 0 ? (
             <div className="py-16 text-center text-slate-400 space-y-2">
               <Table className="w-10 h-10 text-slate-300 mx-auto" />
               <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                No students enrolled in this grade & section
+                {searchQuery ? `No students matching "${searchQuery}"` : 'No students enrolled in this grade & section'}
               </p>
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-xs text-sky-600 dark:text-sky-400 font-semibold underline"
+                >
+                  Clear search filter
+                </button>
+              )}
             </div>
           ) : (
             <table className="w-full text-left border-collapse text-xs">
-              <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider text-[11px]">
+              <thead className="sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider text-[11px]">
                 <tr>
                   <th className="py-3 px-3 w-10 text-center">#</th>
                   <th className="py-3 px-3 min-w-[180px]">Student Name</th>
                   <th className="py-3 px-3 w-32">Admission / FAN</th>
                   
-                  {/* Dynamic Columns for each assessment component */}
+                  {/* Dynamic Columns for each assessment component with Fast Action Menu */}
                   {components.length > 0 ? (
-                    components.map((comp) => (
-                      <th key={comp.id} className="py-3 px-3 text-center min-w-[120px] bg-slate-50 dark:bg-slate-800/90 border-l border-slate-200 dark:border-slate-700">
-                        <div>{comp.name}</div>
-                        <div className="text-[10px] text-sky-600 dark:text-sky-400 font-normal">
-                          {comp.weight}% • Max {comp.maxScore}
+                    components.map((comp, compIdx) => (
+                      <th key={comp.id} className="py-2.5 px-3 text-center min-w-[140px] bg-slate-50 dark:bg-slate-800/90 border-l border-slate-200 dark:border-slate-700 relative">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span className="font-bold">{comp.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setOpenColumnMenuId(openColumnMenuId === comp.id ? null : comp.id)}
+                            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-sky-600 dark:text-sky-400 transition-colors"
+                            title={`Batch fill or clear ${comp.name}`}
+                          >
+                            <Zap className="w-3 h-3 fill-sky-500/20" />
+                          </button>
                         </div>
+                        <div className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold">
+                          {comp.weight}% • Max {comp.maxScore} pts
+                        </div>
+
+                        {/* Column Quick Batch Menu Popover */}
+                        {openColumnMenuId === comp.id && (
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-30 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-2 text-left normal-case space-y-1">
+                            <div className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">
+                              Batch Fill {comp.name}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleBatchFillColumn(comp.id, 100, true)}
+                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-sky-50 dark:hover:bg-sky-950/40 hover:text-sky-600 flex items-center justify-between"
+                            >
+                              <span>Full Marks (100%)</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{comp.maxScore}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleBatchFillColumn(comp.id, 90, true)}
+                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-sky-50 dark:hover:bg-sky-950/40 hover:text-sky-600 flex items-center justify-between"
+                            >
+                              <span>90% of Max</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{(comp.maxScore * 0.9).toFixed(1)}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleBatchFillColumn(comp.id, 80, true)}
+                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-sky-50 dark:hover:bg-sky-950/40 hover:text-sky-600 flex items-center justify-between"
+                            >
+                              <span>80% of Max</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{(comp.maxScore * 0.8).toFixed(1)}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleBatchFillColumn(comp.id, 75, true)}
+                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-sky-50 dark:hover:bg-sky-950/40 hover:text-sky-600 flex items-center justify-between"
+                            >
+                              <span>75% of Max</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{(comp.maxScore * 0.75).toFixed(1)}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleBatchFillColumn(comp.id, 50, true)}
+                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-sky-50 dark:hover:bg-sky-950/40 hover:text-sky-600 flex items-center justify-between"
+                            >
+                              <span>50% (Passing)</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{(comp.maxScore * 0.5).toFixed(1)}</span>
+                            </button>
+                            <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+                            <button
+                              type="button"
+                              onClick={() => handleClearColumn(comp.id)}
+                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-1.5"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Clear this column</span>
+                            </button>
+                          </div>
+                        )}
                       </th>
                     ))
                   ) : (
-                    <th className="py-3 px-3 text-center min-w-[120px]">
-                      Score (Max: 100)
+                    <th className="py-2.5 px-3 text-center min-w-[140px] relative">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="font-bold">Score (Max: 100)</span>
+                        <button
+                          type="button"
+                          onClick={() => setOpenColumnMenuId(openColumnMenuId === 'FINAL_SCORE' ? null : 'FINAL_SCORE')}
+                          className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-sky-600"
+                        >
+                          <Zap className="w-3 h-3" />
+                        </button>
+                      </div>
+                      {openColumnMenuId === 'FINAL_SCORE' && (
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-30 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-2 text-left normal-case space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => handleBatchFillColumn('FINAL_SCORE', 100)}
+                            className="w-full text-left px-2 py-1 rounded text-xs text-slate-700 dark:text-slate-200 hover:bg-sky-50"
+                          >
+                            Fill 100%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleBatchFillColumn('FINAL_SCORE', 80)}
+                            className="w-full text-left px-2 py-1 rounded text-xs text-slate-700 dark:text-slate-200 hover:bg-sky-50"
+                          >
+                            Fill 80%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleClearColumn('FINAL_SCORE')}
+                            className="w-full text-left px-2 py-1 rounded text-xs text-rose-600 hover:bg-rose-50"
+                          >
+                            Clear Column
+                          </button>
+                        </div>
+                      )}
                     </th>
                   )}
 
@@ -1295,7 +1616,7 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                {entries.map((stu, index) => {
+                {filteredEntries.map((stu, index) => {
                   const studentBreakdown = computeStudentSubjectResult(
                     stu.componentScores || {},
                     currentSubject || null
@@ -1304,6 +1625,8 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
                     components.length > 0
                       ? studentBreakdown.finalPercentage
                       : stu.score;
+
+                  const colCount = components.length > 0 ? components.length : 1;
 
                   return (
                     <tr
@@ -1326,37 +1649,75 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
 
                       {/* Component Inputs */}
                       {components.length > 0 ? (
-                        components.map((comp) => {
+                        components.map((comp, compIdx) => {
                           const currentVal = stu.componentScores?.[comp.id];
                           const isOver = currentVal !== null && currentVal !== undefined && currentVal > comp.maxScore;
+                          const cellId = `cell-input-${index}-${compIdx}`;
 
                           return (
                             <td
                               key={comp.id}
                               className="py-2 px-2 text-center border-l border-slate-100 dark:border-slate-800"
                             >
-                              <input
-                                type="number"
-                                min="0"
-                                max={comp.maxScore}
-                                step="0.5"
-                                placeholder="—"
-                                value={currentVal !== null && currentVal !== undefined ? currentVal : ''}
-                                onChange={(e) =>
-                                  handleUpdateComponentScore(stu.studentId, comp.id, e.target.value)
-                                }
-                                className={`w-20 h-8 text-center font-bold text-xs rounded-lg border focus:outline-none focus:ring-2 ${
-                                  isOver
-                                    ? 'border-rose-500 text-rose-600 bg-rose-50'
-                                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-sky-500 focus:ring-sky-500/20'
-                                }`}
-                              />
+                              <div className="inline-flex items-center justify-center gap-1">
+                                <input
+                                  id={cellId}
+                                  type="number"
+                                  min="0"
+                                  max={comp.maxScore}
+                                  step="0.5"
+                                  placeholder="—"
+                                  value={currentVal !== null && currentVal !== undefined ? currentVal : ''}
+                                  onChange={(e) =>
+                                    handleUpdateComponentScore(stu.studentId, comp.id, e.target.value)
+                                  }
+                                  onFocus={(e) => e.target.select()}
+                                  onPaste={(e) => handleCellPaste(e, stu.studentId, comp.id)}
+                                  onKeyDown={(e) =>
+                                    handleCellKeyDown(e, index, compIdx, filteredEntries.length, colCount)
+                                  }
+                                  className={`w-20 h-9 text-center font-bold text-xs rounded-xl border transition-all ${
+                                    isOver
+                                      ? 'border-rose-500 text-rose-600 bg-rose-50 ring-2 ring-rose-400/20'
+                                      : currentVal !== null && currentVal !== undefined
+                                      ? 'border-sky-300 dark:border-sky-700 bg-sky-50/40 dark:bg-sky-950/20 text-slate-900 dark:text-white font-black'
+                                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20'
+                                  }`}
+                                />
+
+                                {/* Mini Steppers */}
+                                <div className="flex flex-col gap-0.5 opacity-60 hover:opacity-100">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const next = Math.min(comp.maxScore, (currentVal || 0) + 1);
+                                      handleUpdateComponentScore(stu.studentId, comp.id, String(next));
+                                    }}
+                                    className="w-4 h-4 bg-slate-100 dark:bg-slate-700 hover:bg-sky-100 dark:hover:bg-sky-900 rounded text-[9px] font-bold text-slate-600 dark:text-slate-300 flex items-center justify-center"
+                                    title="+1 point"
+                                  >
+                                    +
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const next = Math.max(0, (currentVal || 0) - 1);
+                                      handleUpdateComponentScore(stu.studentId, comp.id, String(next));
+                                    }}
+                                    className="w-4 h-4 bg-slate-100 dark:bg-slate-700 hover:bg-rose-100 dark:hover:bg-rose-900 rounded text-[9px] font-bold text-slate-600 dark:text-slate-300 flex items-center justify-center"
+                                    title="-1 point"
+                                  >
+                                    -
+                                  </button>
+                                </div>
+                              </div>
                             </td>
                           );
                         })
                       ) : (
                         <td className="py-2 px-2 text-center">
                           <input
+                            id={`cell-input-${index}-0`}
                             type="number"
                             min="0"
                             max="100"
@@ -1364,7 +1725,10 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
                             placeholder="—"
                             value={stu.score !== null && stu.score !== undefined ? stu.score : ''}
                             onChange={(e) => handleUpdateFinalScore(stu.studentId, e.target.value)}
-                            className="w-20 h-8 text-center font-bold text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                            onFocus={(e) => e.target.select()}
+                            onPaste={(e) => handleCellPaste(e, stu.studentId, 'FINAL_SCORE')}
+                            onKeyDown={(e) => handleCellKeyDown(e, index, 0, filteredEntries.length, 1)}
+                            className="w-20 h-9 text-center font-bold text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
                           />
                         </td>
                       )}
@@ -1383,8 +1747,18 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
                       {/* Grade Badge */}
                       <td className="py-2.5 px-3 text-center">
                         {displayTotal !== null && displayTotal !== undefined ? (
-                          <span className="font-bold text-xs text-slate-700 dark:text-slate-300">
-                            {studentBreakdown.gradeLetter}
+                          <span
+                            className={`inline-block px-2.5 py-0.5 rounded-md font-extrabold text-xs ${
+                              displayTotal >= 70
+                                ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                                : displayTotal >= 50
+                                ? 'bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300'
+                                : displayTotal >= 40
+                                ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+                                : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+                            }`}
+                          >
+                            {studentBreakdown.gradeLetter || getLetterGrade(displayTotal)}
                           </span>
                         ) : (
                           <span className="text-slate-400">—</span>
