@@ -17,6 +17,9 @@ import {
   Lock,
   FileSpreadsheet,
   Layers,
+  ExternalLink,
+  RefreshCw,
+  UploadCloud,
 } from 'lucide-react';
 import {
   AcademicYear,
@@ -35,6 +38,10 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { BulkSpreadsheetMarkInputModal } from './BulkSpreadsheetMarkInputModal';
 import { computeStudentSubjectResult } from '../../lib/academicUtils';
+import {
+  createMarklistGoogleSpreadsheet,
+  syncMarksFromGoogleSpreadsheet,
+} from '../../lib/googleSheets';
 
 interface SchoolMarklistViewProps {
   company: Company;
@@ -80,6 +87,14 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
   const [searchFilter, setSearchFilter] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
+
+  // Google Sheets integration state
+  const [googleSpreadsheetId, setGoogleSpreadsheetId] = useState<string | null>(null);
+  const [googleSpreadsheetUrl, setGoogleSpreadsheetUrl] = useState<string | null>(null);
+  const [googleSpreadsheetTitle, setGoogleSpreadsheetTitle] = useState<string | null>(null);
+  const [isGoogleSheetsLoading, setIsGoogleSheetsLoading] = useState(false);
+  const [isSyncingFromGoogle, setIsSyncingFromGoogle] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
 
   // Filter sections by selected grade
   const availableSections = useMemo(() => {
@@ -249,6 +264,75 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
     }
   };
 
+  // Google Sheets Direct Actions
+  const handleEditInGoogleSheets = async () => {
+    if (!currentSubject) {
+      setErrorMessage('Please select a curriculum subject.');
+      return;
+    }
+    if (entries.length === 0) {
+      setErrorMessage('No enrolled students found to export to Google Sheets.');
+      return;
+    }
+
+    setIsGoogleSheetsLoading(true);
+    setErrorMessage(null);
+    try {
+      const result = await createMarklistGoogleSpreadsheet({
+        schoolName: company.name || 'School Name',
+        academicYearName: currentYear?.name || 'Academic Year',
+        gradeName: currentGrade?.name || 'Grade',
+        sectionName: currentSection?.name || 'Section',
+        subject: currentSubject,
+        entries: entries,
+        existingSpreadsheetId: googleSpreadsheetId,
+      });
+
+      setGoogleSpreadsheetId(result.spreadsheetId);
+      setGoogleSpreadsheetUrl(result.spreadsheetUrl);
+      setGoogleSpreadsheetTitle(result.title);
+      setLastSyncedTime(new Date().toLocaleTimeString());
+
+      window.open(result.spreadsheetUrl, '_blank', 'noopener,noreferrer');
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 5000);
+    } catch (err: any) {
+      console.error('Failed to open Google Spreadsheet:', err);
+      setErrorMessage(err.message || 'Could not connect to Google Sheets. Please ensure popup blocker is disabled.');
+    } finally {
+      setIsGoogleSheetsLoading(false);
+    }
+  };
+
+  const handleSyncFromGoogleSheets = async () => {
+    if (!googleSpreadsheetId) {
+      setErrorMessage('No Google Spreadsheet is currently linked. Click "Edit in Google Spreadsheet" first.');
+      return;
+    }
+    if (!currentSubject) return;
+
+    setIsSyncingFromGoogle(true);
+    setErrorMessage(null);
+    try {
+      const { updatedEntries, syncedCount } = await syncMarksFromGoogleSpreadsheet({
+        spreadsheetId: googleSpreadsheetId,
+        subject: currentSubject,
+        existingEntries: entries,
+      });
+
+      setEntries(updatedEntries as MarklistEntry[]);
+      setHasUnsavedChanges(true);
+      setLastSyncedTime(new Date().toLocaleTimeString());
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 4000);
+    } catch (err: any) {
+      console.error('Failed to sync from Google Sheets:', err);
+      setErrorMessage(err.message || 'Failed to sync marks from Google Sheets.');
+    } finally {
+      setIsSyncingFromGoogle(false);
+    }
+  };
+
   // Quick helper: Compute grade letter from score & max
   const getLetterGrade = (score: number | null, max: number) => {
     if (score === null || score === undefined) return { label: '—', color: 'text-slate-400' };
@@ -380,6 +464,19 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Primary Google Sheets Action */}
+            <Button
+              variant="outline"
+              size="md"
+              icon={ExternalLink}
+              isLoading={isGoogleSheetsLoading}
+              onClick={handleEditInGoogleSheets}
+              disabled={entries.length === 0}
+              className="text-xs bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 font-bold"
+            >
+              Edit in Google Spreadsheet
+            </Button>
+
             <Button
               variant="outline"
               size="md"
@@ -415,6 +512,45 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
             </Button>
           </div>
         </div>
+
+        {/* Google Sheets Active Synchronization Status Banner */}
+        {googleSpreadsheetUrl && (
+          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 rounded-2xl flex items-center justify-between gap-3 text-xs flex-wrap">
+            <div className="flex items-center gap-2 text-emerald-900 dark:text-emerald-200 font-semibold">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Google Spreadsheet Connected:</span>
+              <span className="font-bold underline max-w-sm truncate text-emerald-950 dark:text-white">
+                {googleSpreadsheetTitle || `${currentSubject?.name || 'Subject'} Marks`}
+              </span>
+              {lastSyncedTime && (
+                <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-normal">
+                  (Last synced at {lastSyncedTime})
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={googleSpreadsheetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 shadow-xs"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Open in Google Sheets</span>
+              </a>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={RefreshCw}
+                isLoading={isSyncingFromGoogle}
+                onClick={handleSyncFromGoogleSheets}
+                className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                Sync Marks from Google Sheet
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* The 4 Core Selectors */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
