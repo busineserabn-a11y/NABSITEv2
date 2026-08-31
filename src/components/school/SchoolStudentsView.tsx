@@ -305,7 +305,7 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
                   <th className="py-3.5 px-4 w-12 text-center">#</th>
                   <th className="py-3.5 px-4">Student Details</th>
                   <th className="py-3.5 px-4">Grade & Section</th>
-                  <th className="py-3.5 px-4">System Unique ID</th>
+                  <th className="py-3.5 px-4">FAN / Admission No</th>
                   <th className="py-3.5 px-4">Guardian Contact</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
@@ -333,8 +333,8 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
                             <div className="font-bold text-slate-900 dark:text-white text-sm">
                               {stu.fullName}
                             </div>
-                            <div className="text-[11px] text-slate-500 font-mono">
-                              Adm: {stu.admissionNo} • {stu.gender === 'female' ? 'Female' : 'Male'}
+                            <div className="text-[11px] text-slate-500">
+                              {stu.gender === 'female' ? 'Female' : 'Male'} • ID: <span className="font-mono text-slate-400">{stu.id}</span>
                             </div>
                           </div>
                         </div>
@@ -346,9 +346,9 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
                         </Badge>
                       </td>
 
-                      <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500">
-                        <span title={stu.id} className="hover:text-slate-800 dark:hover:text-slate-200">
-                          {stu.id}
+                      <td className="py-3.5 px-4 font-mono text-[11px]">
+                        <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold border border-amber-500/20">
+                          {stu.admissionNo || stu.id}
                         </span>
                       </td>
 

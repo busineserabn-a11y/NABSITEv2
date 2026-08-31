@@ -40,6 +40,7 @@ import {
   Section,
   Subject,
   Student,
+  StudentScore,
   Marklist,
   SchoolDashboardStats,
   SchoolSearchResult,
@@ -2592,6 +2593,8 @@ export const api = {
             studentName: stu.fullName,
             admissionNo: stu.admissionNo,
             score: existing ? existing.score : null,
+            componentScores: existing?.componentScores || {},
+            weightedTotal: existing?.weightedTotal ?? existing?.score ?? null,
             notes: existing?.notes || '',
             updatedAt: existing?.updatedAt || savedData.updatedAt,
           };
@@ -2635,6 +2638,8 @@ export const api = {
           studentName: stu.fullName,
           admissionNo: stu.admissionNo,
           score: existing ? existing.score : null,
+          componentScores: existing?.componentScores || {},
+          weightedTotal: existing?.weightedTotal ?? existing?.score ?? null,
           notes: existing?.notes || '',
           updatedAt: existing?.updatedAt || seeded.updatedAt,
         };
@@ -2657,6 +2662,8 @@ export const api = {
         studentName: stu.fullName,
         admissionNo: stu.admissionNo,
         score: null,
+        componentScores: {},
+        weightedTotal: null,
       })),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -2670,7 +2677,15 @@ export const api = {
       gradeId: string;
       sectionId: string;
       subjectId: string;
-      entries: Array<{ studentId: string; studentName: string; admissionNo: string; score: number | null; notes?: string }>;
+      entries: Array<{
+        studentId: string;
+        studentName: string;
+        admissionNo: string;
+        score: number | null;
+        componentScores?: Record<string, number | null>;
+        weightedTotal?: number | null;
+        notes?: string;
+      }>;
     }
   ): Promise<Marklist> => {
     const marklistId =
@@ -2693,6 +2708,8 @@ export const api = {
         studentName: e.studentName,
         admissionNo: e.admissionNo,
         score: e.score,
+        componentScores: e.componentScores || {},
+        weightedTotal: e.weightedTotal ?? e.score ?? null,
         notes: e.notes || '',
         updatedAt: nowIso,
       })),
@@ -2707,6 +2724,115 @@ export const api = {
     } catch (err) {
       logError('saveMarklist', err, { marklistId });
       throw new ApiError(500, 'Failed to save student marklist');
+    }
+  },
+
+  // --- Student Portal Verified Lookups ---
+  verifyStudentForPortal: async (
+    companyId: string,
+    fullName: string,
+    fanNumber: string
+  ): Promise<{ student: Student; grade: Grade | null; section: Section | null; academicYear: AcademicYear | null } | null> => {
+    if (!fullName || !fanNumber) return null;
+    const cleanName = fullName.trim().toLowerCase();
+    const cleanFan = fanNumber.trim().toLowerCase();
+
+    // Fetch all students for this company
+    const students = await api.getStudents(companyId);
+    
+    // Strict dual verification: both full name AND FAN / Admission No (or ID) must match
+    const matched = students.find((s) => {
+      const nameMatch = s.fullName.toLowerCase().trim() === cleanName;
+      const fanMatch =
+        s.admissionNo.toLowerCase().trim() === cleanFan ||
+        s.id.toLowerCase().trim() === cleanFan ||
+        s.admissionNo.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanFan.replace(/[^a-z0-9]/g, '') ||
+        s.id.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanFan.replace(/[^a-z0-9]/g, '');
+      return nameMatch && fanMatch;
+    });
+
+    if (!matched) return null;
+
+    const [grades, sections, years] = await Promise.all([
+      api.getGrades(companyId),
+      api.getSections(companyId),
+      api.getAcademicYears(companyId),
+    ]);
+
+    const grade = grades.find((g) => g.id === matched.gradeId) || null;
+    const section = sections.find((s) => s.id === matched.sectionId) || null;
+    const academicYear = years.find((y) => y.id === matched.academicYearId) || years.find((y) => y.isActive) || null;
+
+    return {
+      student: matched,
+      grade,
+      section,
+      academicYear,
+    };
+  },
+
+  getStudentAcademicReport: async (
+    companyId: string,
+    studentId: string
+  ): Promise<Array<{
+    subject: Subject;
+    marklist: Marklist | null;
+    entry: StudentScore | null;
+    finalScore: number | null;
+    weightedTotal: number | null;
+  }>> => {
+    try {
+      const [allStudents, allSubjects, allGrades] = await Promise.all([
+        api.getStudents(companyId),
+        api.getSubjects(companyId),
+        api.getGrades(companyId),
+      ]);
+
+      const student = allStudents.find((s) => s.id === studentId);
+      if (!student) return [];
+
+      const studentSubjects = allSubjects.filter(
+        (sub) => sub.isCommon || (sub.gradeIds && sub.gradeIds.includes(student.gradeId))
+      );
+
+      // Query marklists for student's grade & section
+      let allMarklists: Marklist[] = [];
+      try {
+        const q = query(
+          collection(firestoreDb, 'marklists'),
+          where('companyId', '==', companyId),
+          where('gradeId', '==', student.gradeId),
+          where('sectionId', '==', student.sectionId)
+        );
+        const snap = await withTimeout(getDocs(q), 6000);
+        if (!snap.empty) {
+          allMarklists = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Marklist));
+        }
+      } catch {
+        // use fallback seed
+      }
+
+      const seedLists = INITIAL_MARKLISTS.filter(
+        (m) => m.companyId === companyId && m.gradeId === student.gradeId && m.sectionId === student.sectionId
+      );
+
+      return studentSubjects.map((sub) => {
+        const found =
+          allMarklists.find((m) => m.subjectId === sub.id) ||
+          seedLists.find((m) => m.subjectId === sub.id) ||
+          null;
+        const entry = found?.entries?.find((e) => e.studentId === student.id) || null;
+        return {
+          subject: sub,
+          marklist: found,
+          entry,
+          finalScore: entry ? (entry.weightedTotal ?? entry.score) : null,
+          weightedTotal: entry ? (entry.weightedTotal ?? entry.score) : null,
+        };
+      });
+    } catch (err) {
+      logError('getStudentAcademicReport', err, { companyId, studentId });
+      return [];
     }
   },
 

@@ -928,6 +928,25 @@ export interface Section {
   updatedAt: string;
 }
 
+export interface AssessmentComponent {
+  id: string;
+  name: string; // e.g. "Assignment 1", "Quiz 1", "Test 1", "Midterm Exam", "Final Exam"
+  weight: number; // percentage e.g. 10, 20, 40 (sum across components must equal 100%)
+  maxScore: number; // e.g. 20, 50, 100
+  description?: string;
+  order?: number;
+}
+
+export interface AssessmentBreakdown {
+  componentId: string;
+  componentName: string;
+  score: number | null;
+  maxScore: number;
+  achievementPercentage: number | null; // (score / maxScore) * 100
+  weight: number; // percentage contribution
+  weightedContribution: number | null; // achievementPercentage * weight / 100
+}
+
 export interface Subject {
   id: string;
   companyId: string;
@@ -938,6 +957,7 @@ export interface Subject {
   maxScore: number; // Default 100
   isCommon: boolean;
   description?: string;
+  assessmentComponents?: AssessmentComponent[]; // Flexible 100% assessment weight components
   createdAt: string;
   updatedAt: string;
 }
@@ -946,7 +966,7 @@ export interface Student {
   id: string; // Long Unique ID e.g. "GG_STU_2016_A98F12C"
   companyId: string;
   fullName: string;
-  admissionNo: string; // Roll / Reg number e.g. "GG/2016/041"
+  admissionNo: string; // FAN Number / Admission Roll e.g. "GG001" or "GG/2016/041"
   gender?: 'male' | 'female' | 'other';
   dateOfBirth?: string;
   gradeId: string;
@@ -965,7 +985,9 @@ export interface StudentScore {
   studentId: string;
   studentName: string;
   admissionNo: string;
-  score: number | null; // null for empty/not entered, 0 for zero score, 0..maxScore for numerical score
+  score: number | null; // Total or direct score
+  componentScores?: Record<string, number | null>; // Map of assessment component id -> raw score
+  weightedTotal?: number | null; // Calculated total out of 100% based on components
   notes?: string;
   updatedAt?: string;
 }
@@ -979,6 +1001,7 @@ export interface Marklist {
   gradeId: string;
   sectionId: string;
   subjectId: string;
+  assessmentId?: string; // Optional assessment component filter
   maxScore: number;
   entries: StudentScore[];
   status: 'draft' | 'submitted' | 'published';

@@ -10,12 +10,16 @@ import {
   X,
   Layers,
   Sparkles,
+  Percent,
+  Sliders,
+  HelpCircle,
 } from 'lucide-react';
-import { Subject, Grade, Company } from '../../types';
+import { Subject, Grade, Company, AssessmentComponent } from '../../types';
 import { api } from '../../lib/api';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { validateAssessmentComponentsTotal } from '../../lib/academicUtils';
 
 interface SchoolSubjectsViewProps {
   company: Company;
@@ -41,10 +45,19 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
     isCommon: true,
     gradeIds: [] as string[],
     description: '',
+    assessmentComponents: [] as AssessmentComponent[],
   });
   const [selectedGradeFilter, setSelectedGradeFilter] = useState<string>('ALL');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const defaultStandardComponents: AssessmentComponent[] = [
+    { id: 'comp_assign_1', name: 'Assignment 1', weight: 10, maxScore: 20, description: 'Homework & Problem Sets' },
+    { id: 'comp_quiz_1', name: 'Quiz 1', weight: 10, maxScore: 20, description: 'Quick Assessment' },
+    { id: 'comp_test_1', name: 'Test 1', weight: 20, maxScore: 50, description: 'Theory & Problem Solving' },
+    { id: 'comp_mid_1', name: 'Midterm Exam', weight: 20, maxScore: 50, description: 'Mid-semester Evaluation' },
+    { id: 'comp_final_1', name: 'Final Exam', weight: 40, maxScore: 100, description: 'Comprehensive Final Exam' },
+  ];
 
   const openCreateModal = () => {
     setEditingSubject(null);
@@ -55,6 +68,7 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
       isCommon: true,
       gradeIds: grades.map((g) => g.id),
       description: '',
+      assessmentComponents: defaultStandardComponents,
     });
     setError(null);
     setModalOpen(true);
@@ -69,6 +83,10 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
       isCommon: sub.isCommon ?? false,
       gradeIds: sub.gradeIds || [],
       description: sub.description || '',
+      assessmentComponents:
+        sub.assessmentComponents && sub.assessmentComponents.length > 0
+          ? sub.assessmentComponents
+          : defaultStandardComponents,
     });
     setError(null);
     setModalOpen(true);
@@ -93,10 +111,88 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
     });
   };
 
+  // Assessment Component Management
+  const handleAddComponent = () => {
+    const newId = `comp_${Date.now().toString(36)}`;
+    const compValidation = validateAssessmentComponentsTotal(formData.assessmentComponents);
+    const suggestedWeight = compValidation.remaining > 0 ? Math.min(compValidation.remaining, 20) : 10;
+    
+    setFormData((prev) => ({
+      ...prev,
+      assessmentComponents: [
+        ...prev.assessmentComponents,
+        {
+          id: newId,
+          name: `Assessment ${prev.assessmentComponents.length + 1}`,
+          weight: suggestedWeight,
+          maxScore: 50,
+          description: '',
+        },
+      ],
+    }));
+  };
+
+  const handleRemoveComponent = (id: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      assessmentComponents: prev.assessmentComponents.filter((c) => c.id !== id),
+    }));
+  };
+
+  const handleUpdateComponent = (id: string, field: keyof AssessmentComponent, value: any) => {
+    setFormData((prev) => ({
+      ...prev,
+      assessmentComponents: prev.assessmentComponents.map((c) =>
+        c.id === id ? { ...c, [field]: value } : c
+      ),
+    }));
+  };
+
+  const handleApplyPreset = (preset: 'standard5' | 'examHeavy3' | 'fourPart') => {
+    if (preset === 'standard5') {
+      setFormData((prev) => ({
+        ...prev,
+        assessmentComponents: [
+          { id: 'comp_a1', name: 'Assignment 1', weight: 10, maxScore: 20 },
+          { id: 'comp_q1', name: 'Quiz 1', weight: 10, maxScore: 20 },
+          { id: 'comp_t1', name: 'Test 1', weight: 20, maxScore: 50 },
+          { id: 'comp_mid', name: 'Midterm Exam', weight: 20, maxScore: 50 },
+          { id: 'comp_fin', name: 'Final Exam', weight: 40, maxScore: 100 },
+        ],
+      }));
+    } else if (preset === 'examHeavy3') {
+      setFormData((prev) => ({
+        ...prev,
+        assessmentComponents: [
+          { id: 'comp_a1', name: 'Assignment', weight: 10, maxScore: 20 },
+          { id: 'comp_t1', name: 'Midterm Test', weight: 20, maxScore: 50 },
+          { id: 'comp_fin', name: 'Final Exam', weight: 70, maxScore: 100 },
+        ],
+      }));
+    } else if (preset === 'fourPart') {
+      setFormData((prev) => ({
+        ...prev,
+        assessmentComponents: [
+          { id: 'comp_a1', name: 'Assignments', weight: 15, maxScore: 30 },
+          { id: 'comp_q1', name: 'Quizzes / Labs', weight: 15, maxScore: 30 },
+          { id: 'comp_mid', name: 'Midterm Exam', weight: 30, maxScore: 60 },
+          { id: 'comp_fin', name: 'Final Exam', weight: 40, maxScore: 100 },
+        ],
+      }));
+    }
+  };
+
+  const validation = validateAssessmentComponentsTotal(formData.assessmentComponents);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
       setError('Please provide a subject title (e.g. Mathematics)');
+      return;
+    }
+
+    if (formData.assessmentComponents.length > 0 && !validation.isValid) {
+      setError(`Cannot save subject: Assessment components total is ${validation.total}%. It must equal exactly 100%.`);
       return;
     }
 
@@ -112,6 +208,7 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
           isCommon: formData.isCommon,
           gradeIds: formData.isCommon ? [] : formData.gradeIds,
           description: formData.description,
+          assessmentComponents: formData.assessmentComponents,
         });
       } else {
         await api.createSubject({
@@ -122,6 +219,7 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
           isCommon: formData.isCommon,
           gradeIds: formData.isCommon ? [] : formData.gradeIds,
           description: formData.description,
+          assessmentComponents: formData.assessmentComponents,
         });
       }
       setModalOpen(false);
@@ -147,10 +245,10 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
         <div>
           <h2 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-sky-500" />
-            Curriculum Subjects Directory
+            Curriculum Subjects & Weighted Assessments
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Course codes, maximum assessment scores, and grade-level curriculum associations.
+            Configure flexible 100% assessment weight components (e.g. 10% Assignment, 20% Test, 70% Final Exam).
           </p>
         </div>
 
@@ -193,6 +291,9 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
             .filter((g) => sub.gradeIds?.includes(g.id))
             .map((g) => g.name);
 
+          const comps = sub.assessmentComponents || [];
+          const totalWeight = comps.reduce((acc, c) => acc + (Number(c.weight) || 0), 0);
+
           return (
             <Card
               key={sub.id}
@@ -213,26 +314,60 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Max Evaluation Score: <span className="font-bold text-slate-800 dark:text-slate-200">{sub.maxScore || 100} pts</span>
-                    </p>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                      <span>Max Total: <strong className="text-slate-800 dark:text-slate-200">100%</strong></span>
+                      <span>•</span>
+                      <span className="text-emerald-600 font-semibold">{comps.length} Assessment Parts</span>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => openEditModal(sub)}
                       className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      title="Edit Subject & Weightings"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(sub)}
                       className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                      title="Delete Subject"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
+
+                {/* Weighted Assessment Components Breakdown */}
+                {comps.length > 0 && (
+                  <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      <span>Assessment Parts</span>
+                      <span className={totalWeight === 100 ? 'text-emerald-600' : 'text-amber-500'}>
+                        {totalWeight}% Total
+                      </span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {comps.map((c) => (
+                        <div
+                          key={c.id}
+                          className="flex items-center justify-between text-xs py-1 px-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800"
+                        >
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate pr-2">
+                            {c.name}
+                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[11px] text-slate-400">max {c.maxScore}</span>
+                            <span className="px-1.5 py-0.5 bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 rounded-md font-bold text-[11px]">
+                              {c.weight}%
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Grade Scope */}
                 <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl text-xs space-y-1">
@@ -279,15 +414,20 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
         })}
       </div>
 
-      {/* Subject Modal */}
+      {/* Subject Modal with Flexible Assessment Weighting Builder */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-6">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-sky-500" />
-                {editingSubject ? 'Edit Subject Course' : 'Create Subject Course'}
-              </h3>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-sky-500" />
+                  {editingSubject ? `Edit ${editingSubject.name}` : 'Create Subject Course'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Define title, grade association, and the 100% weighted assessment breakdown.
+                </p>
+              </div>
               <button onClick={() => setModalOpen(false)} className="p-1.5 text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -300,7 +440,7 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
               </div>
             )}
 
-            <form onSubmit={handleSave} className="space-y-4 text-xs">
+            <form onSubmit={handleSave} className="space-y-5 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
@@ -330,18 +470,143 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
-                  Max Assessment Score
-                </label>
-                <input
-                  type="number"
-                  min="10"
-                  max="1000"
-                  value={formData.maxScore}
-                  onChange={(e) => setFormData({ ...formData, maxScore: parseInt(e.target.value) || 100 })}
-                  className="w-full h-11 px-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
+              {/* Assessment Components & 100% Weighting Section */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
+                      <Percent className="w-4 h-4 text-amber-500" />
+                      Subject Assessment Weighting (Must Equal 100%)
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Divide this subject's 100% mark into assignments, tests, and exams.
+                    </p>
+                  </div>
+
+                  {/* Validation Badge */}
+                  <div className="flex items-center gap-1.5">
+                    {validation.isValid ? (
+                      <span className="px-2.5 py-1 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold rounded-lg text-xs flex items-center gap-1 border border-emerald-500/30">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        100% Total (Valid)
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold rounded-lg text-xs flex items-center gap-1 border border-amber-500/30">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        {validation.message}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  <span className="text-[11px] font-bold text-slate-400">Quick Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('standard5')}
+                    className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:border-sky-500 transition-colors"
+                  >
+                    5-Part (10% + 10% + 20% + 20% + 40%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('examHeavy3')}
+                    className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:border-sky-500 transition-colors"
+                  >
+                    3-Part (10% Assign + 20% Test + 70% Exam)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('fourPart')}
+                    className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:border-sky-500 transition-colors"
+                  >
+                    4-Part (15% + 15% + 30% + 40%)
+                  </button>
+                </div>
+
+                {/* Components Table / List */}
+                <div className="space-y-2 pt-2">
+                  {formData.assessmentComponents.map((comp, idx) => (
+                    <div
+                      key={comp.id}
+                      className="grid grid-cols-12 gap-2 p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 items-center"
+                    >
+                      <div className="col-span-5 sm:col-span-5">
+                        <label className="block text-[10px] text-slate-400 font-bold uppercase mb-0.5">
+                          Part #{idx + 1} Name
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={comp.name}
+                          onChange={(e) => handleUpdateComponent(comp.id, 'name', e.target.value)}
+                          placeholder="e.g. Assignment 1"
+                          className="w-full h-8 px-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-900 dark:text-white"
+                        />
+                      </div>
+
+                      <div className="col-span-3 sm:col-span-3">
+                        <label className="block text-[10px] text-slate-400 font-bold uppercase mb-0.5">
+                          Weight (%)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            required
+                            value={comp.weight}
+                            onChange={(e) =>
+                              handleUpdateComponent(comp.id, 'weight', parseFloat(e.target.value) || 0)
+                            }
+                            className="w-full h-8 pl-2.5 pr-6 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
+                          />
+                          <span className="absolute right-2 top-2 text-[10px] text-slate-400 font-bold">%</span>
+                        </div>
+                      </div>
+
+                      <div className="col-span-3 sm:col-span-3">
+                        <label className="block text-[10px] text-slate-400 font-bold uppercase mb-0.5">
+                          Max Raw Score
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="500"
+                          required
+                          value={comp.maxScore}
+                          onChange={(e) =>
+                            handleUpdateComponent(comp.id, 'maxScore', parseInt(e.target.value) || 50)
+                          }
+                          className="w-full h-8 px-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-900 dark:text-white"
+                        />
+                      </div>
+
+                      <div className="col-span-1 flex items-end justify-center pt-3">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveComponent(comp.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                          title="Remove Component"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    icon={Plus}
+                    onClick={handleAddComponent}
+                    className="w-full text-xs border-dashed"
+                  >
+                    Add Another Assessment Component
+                  </Button>
+                </div>
               </div>
 
               {/* Grade Assignment */}
@@ -397,13 +662,28 @@ export const SchoolSubjectsView: React.FC<SchoolSubjectsViewProps> = ({
                 />
               </div>
 
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
-                <Button variant="outline" size="md" onClick={() => setModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button variant="primary" size="md" isLoading={saving} type="submit">
-                  {editingSubject ? 'Update Subject' : 'Create Subject'}
-                </Button>
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+                <div className="text-[11px] text-slate-500">
+                  {validation.isValid ? (
+                    <span className="text-emerald-600 font-semibold">✓ Weight check passed (100%)</span>
+                  ) : (
+                    <span className="text-amber-500 font-semibold">⚠️ Must sum to 100% to finalize</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button variant="outline" size="md" onClick={() => setModalOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    isLoading={saving}
+                    type="submit"
+                    disabled={!validation.isValid && formData.assessmentComponents.length > 0}
+                  >
+                    {editingSubject ? 'Update Subject' : 'Create Subject'}
+                  </Button>
+                </div>
               </div>
             </form>
           </div>

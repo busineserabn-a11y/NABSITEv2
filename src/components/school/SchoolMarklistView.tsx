@@ -15,6 +15,8 @@ import {
   ChevronDown,
   Calculator,
   Lock,
+  FileSpreadsheet,
+  Layers,
 } from 'lucide-react';
 import {
   AcademicYear,
@@ -25,11 +27,14 @@ import {
   Marklist,
   MarklistEntry,
   Company,
+  AssessmentComponent,
 } from '../../types';
 import { api } from '../../lib/api';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { BulkSpreadsheetMarkInputModal } from './BulkSpreadsheetMarkInputModal';
+import { computeStudentSubjectResult } from '../../lib/academicUtils';
 
 interface SchoolMarklistViewProps {
   company: Company;
@@ -74,6 +79,7 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
 
   // Filter sections by selected grade
   const availableSections = useMemo(() => {
@@ -142,22 +148,57 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
     fetchMarklist();
   }, [fetchMarklist]);
 
-  // Active Subject & Max Score
+  // Active Subject & Max Score & Assessment Components
   const currentSubject = subjects.find((s) => s.id === selectedSubjectId);
   const currentGrade = grades.find((g) => g.id === selectedGradeId);
   const currentSection = sections.find((s) => s.id === selectedSectionId);
   const currentYear = academicYears.find((y) => y.id === selectedYearId);
+  const components: AssessmentComponent[] = currentSubject?.assessmentComponents || [];
   const maxScore = currentSubject?.maxScore || marklist?.maxScore || 100;
 
-  // Handle Score Change
+  // Handle Score Change for Simple Score
   const handleScoreChange = (studentId: string, value: string) => {
     const numeric = value === '' ? null : parseFloat(value);
     if (numeric !== null && (isNaN(numeric) || numeric < 0 || numeric > maxScore)) {
-      return; // Restrict invalid numeric inputs
+      return;
     }
 
     setEntries((prev) =>
-      prev.map((item) => (item.studentId === studentId ? { ...item, score: numeric } : item))
+      prev.map((item) =>
+        item.studentId === studentId
+          ? { ...item, score: numeric, weightedTotal: numeric }
+          : item
+      )
+    );
+    setHasUnsavedChanges(true);
+    setSaveSuccess(false);
+  };
+
+  // Handle Component Score Change
+  const handleComponentScoreChange = (studentId: string, compId: string, value: string) => {
+    const numeric = value === '' ? null : parseFloat(value);
+    const comp = components.find((c) => c.id === compId);
+    const compMax = comp?.maxScore || 100;
+
+    if (numeric !== null && (isNaN(numeric) || numeric < 0 || numeric > compMax)) {
+      return;
+    }
+
+    setEntries((prev) =>
+      prev.map((item) => {
+        if (item.studentId !== studentId) return item;
+        const nextCompScores = {
+          ...(item.componentScores || {}),
+          [compId]: numeric,
+        };
+        const calc = computeStudentSubjectResult(nextCompScores, currentSubject || null);
+        return {
+          ...item,
+          componentScores: nextCompScores,
+          score: calc.finalPercentage !== null ? calc.finalPercentage : item.score,
+          weightedTotal: calc.finalPercentage,
+        };
+      })
     );
     setHasUnsavedChanges(true);
     setSaveSuccess(false);
@@ -223,8 +264,8 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
   // Computed Class Statistics
   const stats = useMemo(() => {
     const scoredList = entries
-      .filter((e) => e.score !== null && e.score !== undefined)
-      .map((e) => e.score as number);
+      .map((e) => (e.weightedTotal !== null && e.weightedTotal !== undefined ? e.weightedTotal : e.score))
+      .filter((s) => s !== null && s !== undefined) as number[];
 
     if (scoredList.length === 0) {
       return {
@@ -243,19 +284,19 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
     const avg = sum / scoredList.length;
     const high = Math.max(...scoredList);
     const low = Math.min(...scoredList);
-    const pass = scoredList.filter((s) => (s / maxScore) * 100 >= 50).length;
+    const pass = scoredList.filter((s) => s >= 50).length;
 
     return {
       count: entries.length,
       evaluated: scoredList.length,
       average: parseFloat(avg.toFixed(1)),
-      averagePct: parseFloat(((avg / maxScore) * 100).toFixed(1)),
+      averagePct: parseFloat(avg.toFixed(1)),
       highest: high,
       lowest: low,
       passCount: pass,
       passRate: parseFloat(((pass / scoredList.length) * 100).toFixed(1)),
     };
-  }, [entries, maxScore]);
+  }, [entries]);
 
   // Filtered entries for search
   const filteredEntries = useMemo(() => {
@@ -272,11 +313,16 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
   // Export CSV
   const handleExportCsv = () => {
     if (entries.length === 0) return;
-    const headers = ['Student ID', 'Admission No', 'Full Name', 'Grade', 'Section', 'Subject', 'Academic Year', 'Score', 'Max Score', 'Percentage', 'Letter Grade', 'Remarks'];
+    const baseHeaders = ['Student ID', 'Admission No', 'Full Name', 'Grade', 'Section', 'Subject', 'Academic Year'];
+    if (components.length > 0) {
+      components.forEach((c) => baseHeaders.push(`${c.name} (${c.weight}%, max ${c.maxScore})`));
+    }
+    baseHeaders.push('Final Score (%)', 'Letter Grade', 'Remarks');
+
     const rows = entries.map((e) => {
-      const pct = e.score !== null ? `${((e.score / maxScore) * 100).toFixed(1)}%` : 'N/A';
-      const gradeLetter = getLetterGrade(e.score, maxScore).label;
-      return [
+      const calc = computeStudentSubjectResult(e.componentScores || {}, currentSubject || null);
+      const finalVal = components.length > 0 ? calc.finalPercentage : e.score;
+      const row = [
         `"${e.studentId}"`,
         `"${e.admissionNo}"`,
         `"${e.studentName}"`,
@@ -284,15 +330,22 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
         `"${currentSection?.name || ''}"`,
         `"${currentSubject?.name || ''}"`,
         `"${currentYear?.name || ''}"`,
-        e.score !== null ? e.score : '',
-        maxScore,
-        `"${pct}"`,
-        `"${gradeLetter}"`,
-        `"${e.notes || ''}"`,
-      ].join(',');
+      ];
+
+      if (components.length > 0) {
+        components.forEach((c) => row.push(e.componentScores?.[c.id] !== undefined ? `${e.componentScores[c.id]}` : ''));
+      }
+
+      row.push(
+        finalVal !== null ? `${finalVal}%` : '',
+        `"${calc.gradeLetter}"`,
+        `"${e.notes || ''}"`
+      );
+
+      return row.join(',');
     });
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n');
+    const csvContent = 'data:text/csv;charset=utf-8,' + [baseHeaders.join(','), ...rows].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
@@ -322,11 +375,21 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
               </h2>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Select class criteria to load enrolled students and enter curriculum scores.
+              Select class criteria to load enrolled students and enter curriculum scores or weighted assessment parts.
             </p>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="md"
+              icon={FileSpreadsheet}
+              onClick={() => setBulkModalOpen(true)}
+              className="text-xs bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800 hover:bg-sky-100"
+            >
+              Spreadsheet Bulk Input
+            </Button>
+
             {hasUnsavedChanges && (
               <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 flex items-center gap-1.5 animate-pulse">
                 <AlertCircle className="w-3.5 h-3.5" />
@@ -367,7 +430,7 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
             >
               {academicYears.map((ay) => (
                 <option key={ay.id} value={ay.id}>
-                  {ay.name} {ay.isActive ? '(Active)' : ''} — {ay.calendarType === 'ETHIOPIAN' ? 'Ethiopian' : 'Gregorian'}
+                  {ay.name} {ay.isActive ? '(Active)' : ''}
                 </option>
               ))}
             </select>
@@ -430,7 +493,7 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
               ) : (
                 availableSubjects.map((sub) => (
                   <option key={sub.id} value={sub.id}>
-                    {sub.name} ({sub.code || 'CODE'} • Max {sub.maxScore || 100})
+                    {sub.name} ({sub.code || 'CODE'}) {sub.assessmentComponents?.length ? `• ${sub.assessmentComponents.length} Parts` : '• 100%'}
                   </option>
                 ))
               )}
@@ -450,7 +513,8 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
             {currentGrade?.name || 'Grade'} • {currentSection?.name || 'Section'}
           </span>
           <span className="bg-white dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-amber-500/30 font-bold text-slate-900 dark:text-white">
-            {currentSubject?.name || 'Subject'} (Max: {maxScore} pts)
+            {currentSubject?.name || 'Subject'}{' '}
+            {components.length > 0 ? `(${components.length} Weighted Parts)` : `(Max: ${maxScore} pts)`}
           </span>
           <span className="bg-white dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-amber-500/30 text-slate-600 dark:text-slate-300">
             Year: {currentYear?.name || 'Year'}
@@ -493,22 +557,21 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
         <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
           <span className="text-[11px] font-bold text-slate-500 uppercase">Class Average</span>
           <p className="text-lg font-extrabold text-amber-600 dark:text-amber-400 mt-1">
-            {stats.evaluated > 0 ? `${stats.average} / ${maxScore}` : '—'}
-            {stats.evaluated > 0 && <span className="text-xs font-normal text-slate-400 ml-1">({stats.averagePct}%)</span>}
+            {stats.evaluated > 0 ? `${stats.average}%` : '—'}
           </p>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
           <span className="text-[11px] font-bold text-slate-500 uppercase">Highest Score</span>
           <p className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
-            {stats.evaluated > 0 ? `${stats.highest} / ${maxScore}` : '—'}
+            {stats.evaluated > 0 ? `${stats.highest}%` : '—'}
           </p>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
           <span className="text-[11px] font-bold text-slate-500 uppercase">Lowest Score</span>
           <p className="text-lg font-extrabold text-rose-600 dark:text-rose-400 mt-1">
-            {stats.evaluated > 0 ? `${stats.lowest} / ${maxScore}` : '—'}
+            {stats.evaluated > 0 ? `${stats.lowest}%` : '—'}
           </p>
         </div>
 
@@ -539,7 +602,7 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
         </span>
       </div>
 
-      {/* 5. The Marklist Table */}
+      {/* 5. The Marklist Table with Assessment Columns */}
       <Card variant="bordered" padding="none" className="overflow-hidden">
         {loading ? (
           <div className="py-20 text-center text-slate-400 flex flex-col items-center justify-center space-y-2">
@@ -553,28 +616,56 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
               No Enrolled Students Found in this Section
             </h4>
             <p className="text-xs text-slate-500 max-w-md mx-auto">
-              No students are currently assigned to {currentGrade?.name || 'this grade'} • {currentSection?.name || 'this section'}. Add students in the Students Roster tab to begin recording marks.
+              No students are currently assigned to {currentGrade?.name || 'this grade'} • {currentSection?.name || 'this section'}.
             </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-bold uppercase tracking-wider">
+                <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                   <th className="py-3.5 px-4 w-12 text-center">#</th>
-                  <th className="py-3.5 px-4">Student Details</th>
-                  <th className="py-3.5 px-4">System Unique ID</th>
-                  <th className="py-3.5 px-4 w-40 text-center">
-                    Score (Max: {maxScore})
+                  <th className="py-3.5 px-4 min-w-[170px]">Student Details</th>
+                  <th className="py-3.5 px-4">FAN / Unique ID</th>
+
+                  {/* Component Breakdown Columns */}
+                  {components.length > 0 ? (
+                    components.map((comp) => (
+                      <th
+                        key={comp.id}
+                        className="py-3.5 px-3 text-center min-w-[110px] bg-slate-100/60 dark:bg-slate-800/90 border-l border-slate-200 dark:border-slate-700"
+                      >
+                        <div className="font-extrabold text-slate-800 dark:text-slate-200">{comp.name}</div>
+                        <div className="text-[10px] text-sky-600 dark:text-sky-400 font-normal">
+                          {comp.weight}% • Max {comp.maxScore}
+                        </div>
+                      </th>
+                    ))
+                  ) : (
+                    <th className="py-3.5 px-4 w-40 text-center">
+                      Score (Max: {maxScore})
+                    </th>
+                  )}
+
+                  <th className="py-3.5 px-4 text-center w-32 bg-emerald-50/50 dark:bg-emerald-950/20 border-l border-slate-200 dark:border-slate-700">
+                    <div>Weighted Total</div>
+                    <div className="text-[10px] text-emerald-600 font-normal">100% Score</div>
                   </th>
                   <th className="py-3.5 px-4 w-32">Grade / Status</th>
-                  <th className="py-3.5 px-4 min-w-[180px]">Teacher Remarks / Notes</th>
+                  <th className="py-3.5 px-4 min-w-[160px]">Teacher Remarks</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
                 {filteredEntries.map((item, index) => {
-                  const letterGrade = getLetterGrade(item.score, maxScore);
-                  const isPassed = item.score !== null && (item.score / maxScore) * 100 >= 50;
+                  const studentBreakdown = computeStudentSubjectResult(
+                    item.componentScores || {},
+                    currentSubject || null
+                  );
+                  const effectiveScore =
+                    components.length > 0
+                      ? studentBreakdown.finalPercentage
+                      : item.score;
+                  const letterGrade = getLetterGrade(effectiveScore, 100);
 
                   return (
                     <tr
@@ -596,45 +687,89 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
                         </div>
                       </td>
 
-                      {/* 3. Long Unique Student ID */}
-                      <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500 truncate max-w-[150px]">
-                        <span title={item.studentId} className="hover:text-slate-800 dark:hover:text-slate-200">
-                          {item.studentId}
+                      {/* 3. Unique Student ID */}
+                      <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500 truncate max-w-[140px]">
+                        <span title={item.studentId} className="hover:text-slate-800 dark:text-slate-400">
+                          {item.admissionNo}
                         </span>
                       </td>
 
-                      {/* 4. Score Input */}
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="inline-flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            min="0"
-                            max={maxScore}
-                            step="0.5"
-                            placeholder="—"
-                            value={item.score !== null && item.score !== undefined ? item.score : ''}
-                            onChange={(e) => handleScoreChange(item.studentId, e.target.value)}
-                            className="w-20 h-9 text-center bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-sm font-extrabold text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
-                          />
-                          <span className="text-slate-400 font-bold text-xs">/ {maxScore}</span>
-                        </div>
-                      </td>
+                      {/* 4. Assessment Components inputs or single score input */}
+                      {components.length > 0 ? (
+                        components.map((comp) => {
+                          const val = item.componentScores?.[comp.id];
+                          const isExceeded = val !== null && val !== undefined && val > comp.maxScore;
 
-                      {/* 5. Grade / Evaluation */}
-                      <td className="py-3.5 px-4">
-                        {item.score !== null && item.score !== undefined ? (
+                          return (
+                            <td
+                              key={comp.id}
+                              className="py-3 px-2 text-center border-l border-slate-100 dark:border-slate-800"
+                            >
+                              <div className="inline-flex items-center justify-center gap-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={comp.maxScore}
+                                  step="0.5"
+                                  placeholder="—"
+                                  value={val !== null && val !== undefined ? val : ''}
+                                  onChange={(e) =>
+                                    handleComponentScoreChange(item.studentId, comp.id, e.target.value)
+                                  }
+                                  className={`w-16 h-8 text-center bg-white dark:bg-slate-800 border-2 rounded-lg text-xs font-extrabold focus:outline-none ${
+                                    isExceeded
+                                      ? 'border-rose-500 text-rose-600'
+                                      : 'border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20'
+                                  }`}
+                                />
+                                <span className="text-[10px] text-slate-400 font-bold">/{comp.maxScore}</span>
+                              </div>
+                            </td>
+                          );
+                        })
+                      ) : (
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="inline-flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min="0"
+                              max={maxScore}
+                              step="0.5"
+                              placeholder="—"
+                              value={item.score !== null && item.score !== undefined ? item.score : ''}
+                              onChange={(e) => handleScoreChange(item.studentId, e.target.value)}
+                              className="w-20 h-9 text-center bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-sm font-extrabold text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                            />
+                            <span className="text-slate-400 font-bold text-xs">/ {maxScore}</span>
+                          </div>
+                        </td>
+                      )}
+
+                      {/* 5. Weighted Total */}
+                      <td className="py-3.5 px-4 text-center border-l border-slate-100 dark:border-slate-800 bg-emerald-50/30 dark:bg-emerald-950/10">
+                        {effectiveScore !== null && effectiveScore !== undefined ? (
                           <div>
-                            <span className={letterGrade.color}>{letterGrade.label}</span>
-                            <div className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                              {((item.score / maxScore) * 100).toFixed(1)}%
-                            </div>
+                            <span className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
+                              {effectiveScore}%
+                            </span>
                           </div>
                         ) : (
-                          <span className="text-slate-400 italic">Pending Entry</span>
+                          <span className="text-slate-400 italic text-[11px]">Pending</span>
                         )}
                       </td>
 
-                      {/* 6. Remarks */}
+                      {/* 6. Grade / Evaluation */}
+                      <td className="py-3.5 px-4">
+                        {effectiveScore !== null && effectiveScore !== undefined ? (
+                          <div>
+                            <span className={letterGrade.color}>{studentBreakdown.gradeLetter || letterGrade.label}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic">Pending</span>
+                        )}
+                      </td>
+
+                      {/* 7. Remarks */}
                       <td className="py-3.5 px-4">
                         <input
                           type="text"
@@ -686,6 +821,26 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
           </div>
         )}
       </Card>
+
+      {/* Bulk Spreadsheet Input Modal */}
+      <BulkSpreadsheetMarkInputModal
+        isOpen={bulkModalOpen}
+        onClose={() => setBulkModalOpen(false)}
+        company={company}
+        academicYears={academicYears}
+        grades={grades}
+        sections={sections}
+        subjects={subjects}
+        initialSelection={{
+          academicYearId: selectedYearId,
+          gradeId: selectedGradeId,
+          sectionId: selectedSectionId,
+          subjectId: selectedSubjectId,
+        }}
+        onSuccessSave={() => {
+          fetchMarklist();
+        }}
+      />
     </div>
   );
 };

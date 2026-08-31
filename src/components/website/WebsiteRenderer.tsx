@@ -65,6 +65,7 @@ import { CompanyName } from '../ui/CompanyName';
 import { MenuItemDetailModal } from './MenuItemDetailModal';
 import { DigitalMenuRenderer } from './DigitalMenuRenderer';
 import { CategorySectionDispatcher } from './CategorySections';
+import { SchoolStudentPortalView } from '../school/SchoolStudentPortalView';
 
 export interface WebsiteRendererProps {
   company: Company;
@@ -117,6 +118,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
 
   const activeThemeId = themeId || website?.themeId || 'theme_corporate';
   const theme = THEME_REGISTRY.find((t) => t.id === activeThemeId) || THEME_REGISTRY[0];
+  const isSchool = company.category === 'School' || company.category === 'Education' || company.id === 'comp_gara_guri' || company.name.toLowerCase().includes('school');
 
   const design = config?.design || {
     primaryColor: theme.defaultPalette.primary,
@@ -1048,8 +1050,6 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
   // -------------------------------------------------------------
   // ABOUT SECTION & FULL PAGE (Specialized for School & Enterprise)
   // -------------------------------------------------------------
-  const isSchool = company.id === 'comp_gara_guri' || company.category === 'Education' || company.name.toLowerCase().includes('school');
-
   const renderAboutSection = () => {
     return (
       <section id="about" className="py-16 sm:py-24 px-4 sm:px-6 max-w-6xl mx-auto space-y-12">
@@ -1737,11 +1737,16 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
   // RENDER SECTIONS ACCORDING TO ACTIVE PAGE
   // -------------------------------------------------------------
   const isPageMenu = activePageSlug === 'menu';
-  const isPageStore = activePageSlug === 'store' || activePageSlug === 'products';
+  const isPageStore = activePageSlug === 'store' || activePageSlug === 'products' || activePageSlug === 'programs';
   const isPageContact = activePageSlug === 'contact';
   const isPageReviews = activePageSlug === 'reviews';
-  const isPageOffers = activePageSlug === 'offers' || activePageSlug === 'announcements';
+  const isPageOffers = activePageSlug === 'offers';
   const isPageAbout = activePageSlug === 'about';
+  const isPageStudent =
+    activePageSlug === 'student' ||
+    activePageSlug === 'student-portal' ||
+    activePageSlug === 'student-lookup' ||
+    activePageSlug === 'about-student';
 
   return (
     <div
@@ -1795,7 +1800,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
               />
               <div className="cursor-pointer" onClick={() => handlePageClick('home')}>
                 <h1
-                  className="text-lg sm:text-xl font-extrabold tracking-tight"
+                  className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900 dark:text-white"
                   style={{ fontFamily: `"${design.headingFont || 'Outfit'}", sans-serif` }}
                 >
                   {company.name}
@@ -1830,6 +1835,18 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
               >
                 {isSchool ? '🏫 School Info' : 'About Us'}
               </button>
+
+              {isSchool && (
+                <button
+                  onClick={() => handlePageClick('student')}
+                  className={`px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
+                    isPageStudent ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 font-black' : 'hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <GraduationCap className="w-3.5 h-3.5 text-amber-500" />
+                  <span>About the Student</span>
+                </button>
+              )}
 
               {announcements.length > 0 && (
                 <button
@@ -1888,6 +1905,16 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
 
             {/* Quick Action CTAs & Mobile Hamburger */}
             <div className="flex items-center gap-2">
+              {isSchool && (
+                <Link
+                  to={`/app/school/${company.id}`}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-xs transition-colors"
+                >
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  <span>Academic Hub</span>
+                </Link>
+              )}
+
               {company.phone && (
                 <a
                   href={`tel:${company.phone}`}
@@ -1898,6 +1925,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                   <span>Call</span>
                 </a>
               )}
+
               {company.telegramUsername && (
                 <a
                   href={`https://t.me/${company.telegramUsername}`}
@@ -1942,9 +1970,21 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                   activePageSlug === 'about' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'
                 }`}
               >
-                <span>🏫 {isSchool ? 'School Info & History' : 'About Us'}</span>
+                <span>🏫 {isSchool ? 'School Info & Profile' : 'About Us'}</span>
                 <ChevronRight className="w-4 h-4 opacity-50" />
               </button>
+
+              {isSchool && (
+                <button
+                  onClick={() => { handlePageClick('student'); setMobileMenuOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-between ${
+                    isPageStudent ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  <span>🎓 About the Student (Results Lookup)</span>
+                  <ChevronRight className="w-4 h-4 opacity-50" />
+                </button>
+              )}
 
               {announcements.length > 0 && (
                 <button
@@ -1982,7 +2022,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 </button>
               )}
 
-              {(offers.length > 0 || announcements.length > 0) && (
+              {offers.length > 0 && (
                 <button
                   onClick={() => { handlePageClick('offers'); setMobileMenuOpen(false); }}
                   className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-between ${
@@ -2004,6 +2044,20 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 <ChevronRight className="w-4 h-4 opacity-50" />
               </button>
 
+              {isSchool && (
+                <Link
+                  to={`/app/school/${company.id}`}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-between text-slate-900 bg-amber-400 hover:bg-amber-300"
+                >
+                  <span className="flex items-center gap-2">
+                    <GraduationCap className="w-4 h-4" />
+                    <span>Academic Management Hub</span>
+                  </span>
+                  <ChevronRight className="w-4 h-4 opacity-50" />
+                </Link>
+              )}
+
               <Link
                 to={`/c/${company.slug}/qr`}
                 onClick={() => setMobileMenuOpen(false)}
@@ -2021,7 +2075,12 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
       )}
 
       {/* DYNAMIC SECTION RENDERING OR FALLBACK ROUTER */}
-      {activePage?.sections && activePage.sections.length > 0 ? (
+      {isPageStudent ? (
+        <div className="space-y-12">
+          <SchoolStudentPortalView company={company} onNavigatePage={handlePageClick} />
+          {renderSectionContainer('contact', renderContactSection())}
+        </div>
+      ) : activePage?.sections && activePage.sections.length > 0 && activePageSlug !== 'home' ? (
         <main className="space-y-12">
           {activePage.sections
             .filter((sec) => sec.isVisible !== false)
@@ -2099,6 +2158,49 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
         /* Default Full Home Page */
         <main className="space-y-12">
           {renderSectionContainer('hero', renderHeroSection())}
+
+          {/* If School, render a dedicated Student Portal Quick Access Section */}
+          {isSchool && (
+            <div className="max-w-6xl mx-auto px-4 sm:px-6">
+              <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-slate-900/5 dark:from-amber-500/15 dark:to-slate-800/40 rounded-3xl p-6 sm:p-8 border border-amber-500/20 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xl shrink-0 shadow-sm">
+                    <GraduationCap className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                      Official Student Services
+                    </span>
+                    <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">
+                      Student Academic Record & Results Portal
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 max-w-xl">
+                      Students and guardians can securely check term results, weighted continuous assessments, and official grade slips using their registered Name and FAN Number.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 shrink-0">
+                  <Button
+                    variant="primary"
+                    size="md"
+                    icon={Search}
+                    onClick={() => handlePageClick('student')}
+                    className="shadow-sm"
+                  >
+                    Check Student Results
+                  </Button>
+                  <Link
+                    to={`/app/school/${company.id}`}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-white transition-colors"
+                  >
+                    Staff Marklist Hub
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+
           {renderSectionContainer('about_preview', renderAboutSection())}
           {announcements.length > 0 && renderSectionContainer('announcements_preview', renderAnnouncementsSection())}
           {renderSectionContainer('promos', renderPromosBanner())}
@@ -2133,17 +2235,32 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
               <button onClick={() => handlePageClick('home')} className="hover:text-white transition-colors">
                 Home
               </button>
-              {products.length > 0 && (
-                <button onClick={() => handlePageClick('menu')} className="hover:text-white transition-colors">
-                  Digital Menu / Catalog
+              <button onClick={() => handlePageClick('about')} className="hover:text-white transition-colors">
+                {isSchool ? 'School Info' : 'About Us'}
+              </button>
+              {isSchool && (
+                <button onClick={() => handlePageClick('student')} className="hover:text-white transition-colors text-amber-400 font-bold">
+                  About the Student
                 </button>
               )}
-              <button onClick={() => handlePageClick('reviews')} className="hover:text-white transition-colors">
-                Reviews
-              </button>
+              {announcements.length > 0 && (
+                <button onClick={() => handlePageClick('announcements')} className="hover:text-white transition-colors">
+                  Announcements
+                </button>
+              )}
+              {products.length > 0 && (
+                <button onClick={() => handlePageClick('menu')} className="hover:text-white transition-colors">
+                  {isSchool ? 'Programs & Resources' : 'Digital Menu / Catalog'}
+                </button>
+              )}
               <button onClick={() => handlePageClick('contact')} className="hover:text-white transition-colors">
                 Contact & Location
               </button>
+              {isSchool && (
+                <Link to={`/app/school/${company.id}`} className="hover:text-amber-400 text-slate-400 transition-colors">
+                  Staff Academic Hub
+                </Link>
+              )}
               <Link to={`/c/${company.slug}/qr`} className="hover:text-white transition-colors">
                 QR Stand
               </Link>
@@ -2153,7 +2270,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
               <p>
                 Verified Digital Presence on <span className="font-bold text-amber-400">NABSITE</span>
               </p>
-              <p className="text-[10px]">Managed Digital Identity Engine</p>
+              <p className="text-[10px]">Managed School & Business Portal Engine</p>
             </div>
           </div>
         </footer>
