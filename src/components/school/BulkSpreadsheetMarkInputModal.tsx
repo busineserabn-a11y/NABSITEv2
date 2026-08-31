@@ -18,6 +18,9 @@ import {
   Plus,
   Trash2,
   Check,
+  FileText,
+  RotateCcw,
+  Zap,
 } from 'lucide-react';
 import {
   AcademicYear,
@@ -35,6 +38,7 @@ import {
   parseSpreadsheetPastedText,
   computeStudentSubjectResult,
   validateAssessmentComponentsTotal,
+  getLetterGrade,
 } from '../../lib/academicUtils';
 
 interface BulkSpreadsheetMarkInputModalProps {
@@ -89,10 +93,16 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
   const [localComponents, setLocalComponents] = useState<AssessmentComponent[]>([]);
   const [savingWeights, setSavingWeights] = useState<boolean>(false);
 
+  // Quick fill constant value state
+  const [showQuickFill, setShowQuickFill] = useState<boolean>(false);
+  const [quickFillVal, setQuickFillVal] = useState<string>('');
+
   // Paste raw text buffer & parsing
   const [pasteBuffer, setPasteBuffer] = useState<string>('');
-  const [pasteMode, setPasteMode] = useState<'SCORE_ONLY' | 'NAME_AND_SCORE'>('SCORE_ONLY');
   const [showPasteBox, setShowPasteBox] = useState<boolean>(false);
+
+  // Hidden File input ref for CSV upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Marklist Data
   const [entries, setEntries] = useState<MarklistEntry[]>([]);
@@ -304,7 +314,6 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
           [compId]: numeric,
         };
 
-        // Recalculate full weighted total if subject has components
         const result = computeStudentSubjectResult(nextCompScores, currentSubject || null);
         return {
           ...entry,
@@ -329,6 +338,329 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
           : entry
       )
     );
+  };
+
+  // -------------------------------------------------------------
+  // 1. TEMPLATE EXPORT & DOWNLOAD (CSV / EXCEL FRIENDLY)
+  // -------------------------------------------------------------
+  const handleDownloadCsv = (blankOnly: boolean = false) => {
+    if (entries.length === 0) {
+      setFeedback({ type: 'error', message: 'No students available to export.' });
+      return;
+    }
+
+    const headers: string[] = ['Student ID', 'Admission No / FAN', 'Full Name'];
+    if (components.length > 0) {
+      components.forEach((c) => {
+        headers.push(`${c.name} [Weight:${c.weight}% Max:${c.maxScore}]`);
+      });
+      if (!blankOnly) {
+        headers.push('Weighted Total (100%)');
+        headers.push('Grade Letter');
+      }
+    } else {
+      headers.push('Score (Max 100)');
+      if (!blankOnly) {
+        headers.push('Grade Letter');
+      }
+    }
+
+    const rows = entries.map((e) => {
+      const row = [
+        `"${e.studentId}"`,
+        `"${e.admissionNo || ''}"`,
+        `"${e.studentName.replace(/"/g, '""')}"`,
+      ];
+
+      if (components.length > 0) {
+        components.forEach((c) => {
+          const val = blankOnly ? '' : (e.componentScores?.[c.id] ?? '');
+          row.push(val !== '' ? String(val) : '');
+        });
+        if (!blankOnly) {
+          const res = computeStudentSubjectResult(e.componentScores || {}, currentSubject || null);
+          row.push(res.finalPercentage !== null ? String(res.finalPercentage) : '');
+          row.push(res.letterGrade || '');
+        }
+      } else {
+        const val = blankOnly ? '' : (e.score ?? '');
+        row.push(val !== '' ? String(val) : '');
+        if (!blankOnly) {
+          row.push(getLetterGrade(e.score) || '');
+        }
+      }
+
+      return row.join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    const cleanGrade = (currentGrade?.name || 'Grade').replace(/[^a-zA-Z0-9]/g, '_');
+    const cleanSection = (currentSection?.name || 'Section').replace(/[^a-zA-Z0-9]/g, '_');
+    const cleanSubject = (currentSubject?.name || 'Subject').replace(/[^a-zA-Z0-9]/g, '_');
+    const prefix = blankOnly ? 'Marklist_Template' : 'Marklist_Recorded_Marks';
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${prefix}_${cleanGrade}_${cleanSection}_${cleanSubject}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setFeedback({
+      type: 'success',
+      message: blankOnly
+        ? 'Downloaded clean CSV Template ready for Excel or Google Sheets!'
+        : 'Downloaded full marks export with weighted totals and grade letters!',
+    });
+  };
+
+  // Copy Template structure to clipboard (TSV)
+  const handleCopyTemplate = () => {
+    const headers = ['#', 'Student ID', 'Admission No / FAN', 'Full Name'];
+    if (components.length > 0) {
+      components.forEach((c) => headers.push(`${c.name} (${c.weight}%, max ${c.maxScore})`));
+      headers.push('Weighted Total (100%)');
+    } else {
+      headers.push('Mark / Score (100%)');
+    }
+
+    const rows = entries.map((e, idx) => {
+      const base = [idx + 1, e.studentId, e.admissionNo || '', e.studentName];
+      if (components.length > 0) {
+        components.forEach((c) => base.push(e.componentScores?.[c.id] ?? ''));
+        base.push(e.weightedTotal ?? e.score ?? '');
+      } else {
+        base.push(e.score ?? '');
+      }
+      return base.join('\t');
+    });
+
+    const tsv = [headers.join('\t'), ...rows].join('\n');
+    navigator.clipboard.writeText(tsv);
+    setFeedback({
+      type: 'success',
+      message: 'Template copied to clipboard! You can paste it directly into Excel or Google Sheets.',
+    });
+  };
+
+  // -------------------------------------------------------------
+  // 2. IMPORT MARKS FROM CSV / SPREADSHEET FILE UPLOAD
+  // -------------------------------------------------------------
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+
+      const parsedLines = parseSpreadsheetPastedText(text);
+      if (parsedLines.length <= 1) {
+        setFeedback({ type: 'error', message: 'No valid mark rows found in uploaded file.' });
+        return;
+      }
+
+      // Check first line for header
+      const headerRow = parsedLines[0].map((h) => h.toLowerCase().trim());
+      const dataRows = parsedLines.slice(1);
+
+      let appliedCount = 0;
+
+      setEntries((prev) => {
+        const next = [...prev];
+
+        dataRows.forEach((row, rowIdx) => {
+          if (row.length === 0 || row.every((c) => c === '')) return;
+
+          // Attempt matching student by ID or FAN or Name, or fallback to row index
+          let targetIndex = -1;
+          const firstCell = (row[0] || '').trim();
+          const secondCell = (row[1] || '').trim();
+          const thirdCell = (row[2] || '').trim();
+
+          targetIndex = next.findIndex(
+            (s) =>
+              (firstCell && s.studentId === firstCell) ||
+              (secondCell && s.admissionNo && s.admissionNo.toLowerCase() === secondCell.toLowerCase()) ||
+              (thirdCell && s.studentName && s.studentName.toLowerCase() === thirdCell.toLowerCase()) ||
+              (firstCell && s.studentName && s.studentName.toLowerCase() === firstCell.toLowerCase())
+          );
+
+          if (targetIndex === -1 && rowIdx < next.length) {
+            targetIndex = rowIdx;
+          }
+
+          if (targetIndex !== -1 && targetIndex < next.length) {
+            const targetStudent = next[targetIndex];
+            const currentComps = { ...(targetStudent.componentScores || {}) };
+
+            if (components.length > 0) {
+              // Extract numeric values from the row (skipping text ID/Name columns if present)
+              const numericValues: number[] = [];
+              row.forEach((cell) => {
+                const cleaned = cell.replace(/[^0-9.-]/g, '');
+                const num = parseFloat(cleaned);
+                if (!isNaN(num) && cleaned !== '') {
+                  numericValues.push(num);
+                }
+              });
+
+              if (numericValues.length > 0) {
+                components.forEach((comp, cIdx) => {
+                  if (numericValues[cIdx] !== undefined) {
+                    const score = Math.max(0, Math.min(comp.maxScore, numericValues[cIdx]));
+                    currentComps[comp.id] = score;
+                  }
+                });
+
+                const result = computeStudentSubjectResult(currentComps, currentSubject || null);
+                next[targetIndex] = {
+                  ...targetStudent,
+                  componentScores: currentComps,
+                  score: result.finalPercentage !== null ? result.finalPercentage : targetStudent.score,
+                  weightedTotal: result.finalPercentage,
+                };
+                appliedCount++;
+              }
+            } else {
+              // Direct single score
+              const numericValues = row
+                .map((cell) => parseFloat(cell.replace(/[^0-9.-]/g, '')))
+                .filter((n) => !isNaN(n));
+              if (numericValues.length > 0) {
+                const score = Math.max(0, Math.min(100, numericValues[numericValues.length - 1]));
+                next[targetIndex] = {
+                  ...targetStudent,
+                  score,
+                  weightedTotal: score,
+                };
+                appliedCount++;
+              }
+            }
+          }
+        });
+
+        return next;
+      });
+
+      setFeedback({
+        type: 'success',
+        message: `Successfully imported and mapped marks for ${appliedCount} students from ${file.name}!`,
+      });
+
+      // Reset file input value
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    };
+
+    reader.readAsText(file);
+  };
+
+  // -------------------------------------------------------------
+  // 3. FAST AUTO-FILL REALISTIC SAMPLE MARKS (DEMO / QUICK TEST)
+  // -------------------------------------------------------------
+  const handleAutoFillRealisticMarks = () => {
+    if (entries.length === 0) {
+      setFeedback({ type: 'error', message: 'No students enrolled to generate marks for.' });
+      return;
+    }
+
+    setEntries((prev) =>
+      prev.map((entry, idx) => {
+        // Generate pseudo-random realistic mark based on student index
+        const baseVariance = ((idx * 7) % 25); // 0 to 24 variation
+        const currentComps: Record<string, number> = {};
+
+        if (components.length > 0) {
+          components.forEach((comp, cIdx) => {
+            // Target 70% to 98% percentage of max score
+            const pct = 0.72 + ((idx * 3 + cIdx * 5) % 26) / 100;
+            const rawScore = Number((comp.maxScore * pct).toFixed(1));
+            currentComps[comp.id] = Math.min(comp.maxScore, rawScore);
+          });
+
+          const result = computeStudentSubjectResult(currentComps, currentSubject || null);
+          return {
+            ...entry,
+            componentScores: currentComps,
+            score: result.finalPercentage !== null ? result.finalPercentage : entry.score,
+            weightedTotal: result.finalPercentage,
+          };
+        } else {
+          const score = 72 + baseVariance;
+          return {
+            ...entry,
+            score,
+            weightedTotal: score,
+          };
+        }
+      })
+    );
+
+    setFeedback({
+      type: 'success',
+      message: `Generated realistic continuous assessment marks across all ${components.length || 1} components for ${entries.length} students!`,
+    });
+  };
+
+  // Quick fill constant value for selected column
+  const handleApplyQuickFillConstant = () => {
+    const valNum = parseFloat(quickFillVal);
+    if (isNaN(valNum) || valNum < 0) {
+      setFeedback({ type: 'error', message: 'Please enter a valid numeric mark.' });
+      return;
+    }
+
+    setEntries((prev) =>
+      prev.map((entry) => {
+        if (selectedComponentId !== 'ALL_COMPONENTS' && selectedComponentId !== 'FINAL_SCORE') {
+          const comp = components.find((c) => c.id === selectedComponentId);
+          const clamped = comp ? Math.min(comp.maxScore, valNum) : valNum;
+          const nextComps = { ...(entry.componentScores || {}), [selectedComponentId]: clamped };
+          const result = computeStudentSubjectResult(nextComps, currentSubject || null);
+          return {
+            ...entry,
+            componentScores: nextComps,
+            score: result.finalPercentage !== null ? result.finalPercentage : entry.score,
+            weightedTotal: result.finalPercentage,
+          };
+        } else {
+          const clamped = Math.min(100, valNum);
+          return {
+            ...entry,
+            score: clamped,
+            weightedTotal: clamped,
+          };
+        }
+      })
+    );
+
+    setFeedback({
+      type: 'success',
+      message: `Set mark to ${valNum} for all ${entries.length} students!`,
+    });
+    setShowQuickFill(false);
+    setQuickFillVal('');
+  };
+
+  // Clear all marks
+  const handleClearAllMarks = () => {
+    if (!window.confirm('Are you sure you want to clear all entered marks in this table?')) return;
+    setEntries((prev) =>
+      prev.map((entry) => ({
+        ...entry,
+        score: null,
+        weightedTotal: null,
+        componentScores: {},
+      }))
+    );
+    setFeedback({ type: 'success', message: 'All student marks cleared from current editor.' });
   };
 
   // Apply Pasted Spreadsheet Data
@@ -444,7 +776,7 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
         lastUpdatedBy: 'Bulk Spreadsheet Input Tool',
       });
 
-      setFeedback({ type: 'success', message: 'All student marks saved successfully!' });
+      setFeedback({ type: 'success', message: 'All student marks saved successfully to the system!' });
       onSuccessSave();
       setTimeout(() => {
         onClose();
@@ -457,37 +789,20 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
     }
   };
 
-  // Copy Template structure to clipboard
-  const handleCopyTemplate = () => {
-    const headers = ['#', 'Student ID', 'Admission No', 'Full Name'];
-    if (components.length > 0) {
-      components.forEach((c) => headers.push(`${c.name} (${c.weight}%, max ${c.maxScore})`));
-      headers.push('Weighted Total (100%)');
-    } else {
-      headers.push('Mark / Score (100%)');
-    }
-
-    const rows = entries.map((e, idx) => {
-      const base = [idx + 1, e.studentId, e.admissionNo, e.studentName];
-      if (components.length > 0) {
-        components.forEach((c) => base.push(e.componentScores?.[c.id] ?? ''));
-        base.push(e.weightedTotal ?? e.score ?? '');
-      } else {
-        base.push(e.score ?? '');
-      }
-      return base.join('\t');
-    });
-
-    const tsv = [headers.join('\t'), ...rows].join('\n');
-    navigator.clipboard.writeText(tsv);
-    setFeedback({ type: 'success', message: 'Template copied to clipboard! You can paste it directly into Excel or Google Sheets.' });
-  };
-
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-6xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-6xl shadow-2xl flex flex-col max-h-[94vh] overflow-hidden">
+        {/* Hidden file input for CSV upload */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept=".csv, .tsv, .txt"
+          className="hidden"
+          onChange={handleFileUpload}
+        />
+
         {/* Modal Header */}
-        <div className="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
+        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center font-bold">
               <FileSpreadsheet className="w-5 h-5" />
@@ -497,15 +812,45 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
                 Spreadsheet-Style Bulk Mark Input Table
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Fast multi-student score entry with copy-paste from Excel / Google Sheets and weighted calculations.
+                Export template, input marks directly or import CSV/Excel file with weighted continuous calculations.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" icon={Copy} onClick={handleCopyTemplate}>
-              Copy Excel Template
-            </Button>
+          {/* Header Action Buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="hidden sm:flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => handleDownloadCsv(true)}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 transition-colors flex items-center gap-1.5"
+                title="Download empty CSV template pre-filled with student names & ID columns"
+              >
+                <Download className="w-3.5 h-3.5 text-sky-600" />
+                <span>Export Template (CSV)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDownloadCsv(false)}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 transition-colors flex items-center gap-1.5"
+                title="Download current entered scores with weighted totals"
+              >
+                <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Export Full Marks</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyTemplate}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 transition-colors flex items-center gap-1.5"
+                title="Copy TSV table to paste into Excel or Google Sheets"
+              >
+                <Copy className="w-3.5 h-3.5 text-amber-600" />
+                <span>Copy TSV</span>
+              </button>
+            </div>
+
             <button
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -518,23 +863,31 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
         {/* Feedback Alert */}
         {feedback && (
           <div
-            className={`p-3 mx-6 mt-4 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+            className={`p-3 mx-6 mt-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 ${
               feedback.type === 'success'
                 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
                 : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30'
             }`}
           >
-            {feedback.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-            ) : (
-              <AlertCircle className="w-4 h-4 shrink-0" />
-            )}
-            <span>{feedback.message}</span>
+            <div className="flex items-center gap-2">
+              {feedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0" />
+              )}
+              <span>{feedback.message}</span>
+            </div>
+            <button
+              onClick={() => setFeedback(null)}
+              className="text-slate-400 hover:text-slate-700 dark:hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 
-        {/* 4 Filter Dropdowns & Component Selector Bar */}
-        <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
+        {/* 4 Filter Dropdowns Bar */}
+        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
           <div>
             <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
               Academic Year
@@ -614,10 +967,10 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
           </div>
         </div>
 
-        {/* Fast Action Toolbar & Weight Adjuster Toggle */}
-        <div className="px-6 py-3 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 text-xs">
+        {/* Input Tools & Fast Action Toolbar */}
+        <div className="px-5 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2.5 text-xs">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-slate-700 dark:text-slate-300">
+            <span className="font-bold text-slate-800 dark:text-slate-200">
               Roster: {entries.length} Students
             </span>
             <span>•</span>
@@ -625,18 +978,58 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
               {currentGrade?.name} — {currentSection?.name} ({currentSubject?.name})
             </span>
             <span>•</span>
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] ${
-              totalWeight === 100
-                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-            }`}>
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                totalWeight === 100
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+              }`}
+            >
               <Percent className="w-3 h-3" />
               <span>Weight Sum: {totalWeight}% {totalWeight === 100 ? '✓ Balanced' : '(Target: 100%)'}</span>
             </span>
           </div>
 
+          {/* Mark Input & Template Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* 1. Upload CSV File */}
             <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-emerald-500 hover:text-emerald-600 shadow-xs transition-colors"
+            >
+              <Upload className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Upload CSV / Excel File</span>
+            </button>
+
+            {/* 2. Paste From Excel */}
+            <button
+              type="button"
+              onClick={() => setShowPasteBox(!showPasteBox)}
+              className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors ${
+                showPasteBox
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-sky-500'
+              }`}
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>{showPasteBox ? 'Hide Paste Box' : 'Paste Column from Excel'}</span>
+            </button>
+
+            {/* 3. Auto-Fill Sample Marks (1-Click Input) */}
+            <button
+              type="button"
+              onClick={handleAutoFillRealisticMarks}
+              className="px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 shadow-xs transition-colors"
+              title="Automatically populate realistic continuous assessment scores (72%-98%) for testing"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Input Sample Marks (Auto-Fill)</span>
+            </button>
+
+            {/* 4. Weight Adjuster Toggle */}
+            <button
+              type="button"
               onClick={() => setShowWeightAdjuster(!showWeightAdjuster)}
               className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors ${
                 showWeightAdjuster
@@ -645,26 +1038,24 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span>{showWeightAdjuster ? 'Hide Weight Adjuster' : 'Adjust Assessment Weights (% 5, 10, 20...)'}</span>
+              <span>{showWeightAdjuster ? 'Hide Weights' : 'Adjust Weights (%)'}</span>
             </button>
 
+            {/* 5. Clear all marks */}
             <button
-              onClick={() => setShowPasteBox(!showPasteBox)}
-              className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors ${
-                showPasteBox
-                  ? 'bg-sky-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-sky-500'
-              }`}
+              type="button"
+              onClick={handleClearAllMarks}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+              title="Clear all marks from table"
             >
-              <Upload className="w-3.5 h-3.5" />
-              <span>{showPasteBox ? 'Hide Paste Box' : 'Paste Column from Excel'}</span>
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         </div>
 
         {/* Assessment Weight Adjuster Drawer */}
         {showWeightAdjuster && (
-          <div className="p-4 sm:p-6 bg-amber-500/5 dark:bg-amber-950/20 border-b border-amber-500/20 space-y-4 shrink-0">
+          <div className="p-4 sm:p-5 bg-amber-500/5 dark:bg-amber-950/20 border-b border-amber-500/20 space-y-4 shrink-0">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
@@ -712,7 +1103,7 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
 
             {/* Individual Component Weight Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
-              {localComponents.map((comp, idx) => (
+              {localComponents.map((comp) => (
                 <div
                   key={comp.id}
                   className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2 shadow-xs"
@@ -807,17 +1198,18 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
 
         {/* Paste from Excel / Spreadsheet Box */}
         {showPasteBox && (
-          <div className="p-4 sm:p-6 bg-sky-500/5 border-b border-sky-500/20 space-y-3 shrink-0">
+          <div className="p-4 sm:p-5 bg-sky-500/5 border-b border-sky-500/20 space-y-3 shrink-0">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-xs text-slate-800 dark:text-white">
-                  Target Paste Column:
+                  Target Paste Mode / Column:
                 </span>
                 <select
                   value={selectedComponentId}
                   onChange={(e) => setSelectedComponentId(e.target.value)}
                   className="h-8 px-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-900 dark:text-white"
                 >
+                  <option value="ALL_COMPONENTS">All Component Columns (Grid Paste)</option>
                   {components.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name} ({c.weight}%, max {c.maxScore})
@@ -828,13 +1220,13 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
               </div>
 
               <p className="text-[11px] text-slate-500">
-                Copy a column of scores from Excel and paste it below. They will be mapped row-by-row to the students.
+                Copy columns or rows of scores from Excel and paste below. They map row-by-row to enrolled students.
               </p>
             </div>
 
             <textarea
               rows={3}
-              placeholder="Paste numbers or rows from Excel/Sheets here (e.g. 18, 19.5, 20 or tab-separated column)..."
+              placeholder="Paste numbers or cells copied from Excel/Sheets (e.g. 18, 19.5, 20 or multiple tab-separated columns)..."
               value={pasteBuffer}
               onChange={(e) => setPasteBuffer(e.target.value)}
               className="w-full p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -929,7 +1321,7 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
                       </td>
 
                       <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500">
-                        {stu.admissionNo}
+                        {stu.admissionNo || '—'}
                       </td>
 
                       {/* Component Inputs */}
@@ -1007,13 +1399,11 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 sm:p-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
-          <div className="text-xs text-slate-500">
-            {entries.length > 0 && (
-              <span>
-                All changes auto-calculate live. Click <strong>Save All Marks</strong> to store in database.
-              </span>
-            )}
+        <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 bg-white dark:bg-slate-900">
+          <div className="text-xs text-slate-500 flex items-center gap-2">
+            <span>
+              All input auto-calculates continuous weighted total. Click <strong>Save All Marks</strong> to store.
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -1036,3 +1426,4 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
     </div>
   );
 };
+
