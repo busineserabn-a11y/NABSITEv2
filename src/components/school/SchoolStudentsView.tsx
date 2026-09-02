@@ -22,6 +22,7 @@ import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { StudentUploadModal } from './StudentUploadModal';
+import { StudentRegistrationSpreadsheet } from './StudentRegistrationSpreadsheet';
 
 interface SchoolStudentsViewProps {
   company: Company;
@@ -41,6 +42,7 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
   academicYears,
   onRefresh,
 }) => {
+  const [isSpreadsheetMode, setIsSpreadsheetMode] = useState<boolean>(false);
   const [gradeFilter, setGradeFilter] = useState<string>('ALL');
   const [sectionFilter, setSectionFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -214,6 +216,22 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
     });
   }, [students, gradeFilter, sectionFilter, searchQuery]);
 
+  if (isSpreadsheetMode) {
+    return (
+      <StudentRegistrationSpreadsheet
+        company={company}
+        academicYears={academicYears}
+        grades={grades}
+        sections={sections}
+        existingStudents={students}
+        onBackToNormalView={() => setIsSpreadsheetMode(false)}
+        onRefreshData={async () => {
+          onRefresh();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -230,16 +248,26 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
 
         <div className="flex items-center gap-2.5 flex-wrap">
           <Button
+            variant="primary"
+            size="md"
+            icon={FileSpreadsheet}
+            onClick={() => setIsSpreadsheetMode(true)}
+            className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+          >
+            Bulk Spreadsheet Registration 2.0
+          </Button>
+
+          <Button
             variant="outline"
             size="md"
             icon={Upload}
             onClick={() => setUploadModalOpen(true)}
             className="text-xs bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100"
           >
-            Upload Students (CSV / Excel)
+            Upload (CSV)
           </Button>
 
-          <Button variant="primary" size="md" icon={Plus} onClick={openCreateModal}>
+          <Button variant="outline" size="md" icon={Plus} onClick={openCreateModal}>
             Register Student
           </Button>
         </div>

@@ -966,6 +966,9 @@ export interface Student {
   id: string; // Long Unique ID e.g. "GG_STU_2016_A98F12C"
   companyId: string;
   fullName: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
   admissionNo: string; // FAN Number / Admission Roll e.g. "GG001" or "GG/2016/041"
   gender?: 'male' | 'female' | 'other';
   dateOfBirth?: string;
@@ -976,6 +979,8 @@ export interface Student {
   guardianName?: string;
   guardianPhone?: string;
   guardianEmail?: string;
+  address?: string;
+  enrollmentDate?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;

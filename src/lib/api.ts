@@ -2542,7 +2542,11 @@ export const api = {
   bulkCreateStudents: async (
     companyId: string,
     studentList: Array<{
+      id?: string;
       fullName: string;
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
       admissionNo?: string;
       gradeId: string;
       sectionId: string;
@@ -2552,15 +2556,20 @@ export const api = {
       guardianName?: string;
       guardianPhone?: string;
       guardianEmail?: string;
+      address?: string;
+      enrollmentDate?: string;
+      status?: 'active' | 'graduated' | 'transferred' | 'inactive';
       notes?: string;
     }>
-  ): Promise<{ addedCount: number; students: Student[] }> => {
+  ): Promise<{ addedCount: number; updatedCount: number; students: Student[] }> => {
     if (!studentList || studentList.length === 0) {
-      return { addedCount: 0, students: [] };
+      return { addedCount: 0, updatedCount: 0, students: [] };
     }
 
     const nowIso = new Date().toISOString();
-    const created: Student[] = [];
+    const saved: Student[] = [];
+    let addedCount = 0;
+    let updatedCount = 0;
 
     // Firestore batch supports up to 500 writes per batch
     const BATCH_SIZE = 400;
@@ -2570,37 +2579,47 @@ export const api = {
 
       for (let j = 0; j < chunk.length; j++) {
         const item = chunk[j];
-        const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const id = `GG_STU_${Date.now()}_${i + j}_${randomSuffix}`;
+        const isUpdate = Boolean(item.id && !item.id.startsWith('temp_'));
+        const id = isUpdate ? item.id! : `GG_STU_${Date.now()}_${i + j}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
         const docRef = doc(firestoreDb, 'students', id);
 
         const payload: Student = {
           id,
           companyId,
           fullName: item.fullName.trim(),
+          firstName: item.firstName?.trim() || '',
+          middleName: item.middleName?.trim() || '',
+          lastName: item.lastName?.trim() || '',
           admissionNo: item.admissionNo?.trim() || `FAN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
           gender: item.gender || 'male',
           dateOfBirth: item.dateOfBirth || '',
           gradeId: item.gradeId,
           sectionId: item.sectionId,
           academicYearId: item.academicYearId || '',
-          status: 'active',
+          status: item.status || 'active',
           guardianName: item.guardianName || '',
           guardianPhone: item.guardianPhone || '',
           guardianEmail: item.guardianEmail || '',
+          address: item.address || '',
+          enrollmentDate: item.enrollmentDate || '',
           notes: item.notes || '',
           createdAt: nowIso,
           updatedAt: nowIso,
         };
 
-        batch.set(docRef, payload);
-        created.push(payload);
+        batch.set(docRef, payload, { merge: true });
+        saved.push(payload);
+        if (isUpdate) {
+          updatedCount++;
+        } else {
+          addedCount++;
+        }
       }
 
-      await withTimeout(batch.commit(), 12000);
+      await withTimeout(batch.commit(), 15000);
     }
 
-    return { addedCount: created.length, students: created };
+    return { addedCount, updatedCount, students: saved };
   },
 
   updateStudent: async (id: string, data: Partial<Student>): Promise<Student> => {
