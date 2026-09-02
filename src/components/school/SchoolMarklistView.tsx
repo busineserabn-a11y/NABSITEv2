@@ -34,6 +34,7 @@ import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { BulkSpreadsheetMarkInputModal } from './BulkSpreadsheetMarkInputModal';
+import { MarklistSpreadsheet } from './MarklistSpreadsheet';
 import { computeStudentSubjectResult } from '../../lib/academicUtils';
 
 interface SchoolMarklistViewProps {
@@ -80,6 +81,7 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
   const [searchFilter, setSearchFilter] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'standard' | 'spreadsheet2'>('standard');
 
   // Filter sections by selected grade
   const availableSections = useMemo(() => {
@@ -360,6 +362,31 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
     window.print();
   };
 
+  if (viewMode === 'spreadsheet2') {
+    return (
+      <MarklistSpreadsheet
+        company={company}
+        academicYears={academicYears}
+        grades={grades}
+        sections={sections}
+        subjects={subjects}
+        initialSelection={{
+          academicYearId: selectedYearId,
+          gradeId: selectedGradeId,
+          sectionId: selectedSectionId,
+          subjectId: selectedSubjectId,
+        }}
+        onBackToStandardView={() => {
+          setViewMode('standard');
+          fetchMarklist();
+        }}
+        onSaved={() => {
+          fetchMarklist();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* 1. Top Control Bar: Selectors for Academic Year, Grade, Section, Subject */}
@@ -384,10 +411,20 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
               variant="outline"
               size="md"
               icon={FileSpreadsheet}
-              onClick={() => setBulkModalOpen(true)}
-              className="text-xs bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800 hover:bg-sky-100"
+              onClick={() => setViewMode('spreadsheet2')}
+              className="text-xs bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800 hover:bg-sky-100 font-bold"
             >
-              Spreadsheet Bulk Input
+              Spreadsheet 2.0 Mode
+            </Button>
+
+            <Button
+              variant="outline"
+              size="md"
+              icon={FileSpreadsheet}
+              onClick={() => setBulkModalOpen(true)}
+              className="text-xs text-slate-600 dark:text-slate-300"
+            >
+              Quick Modal
             </Button>
 
             {hasUnsavedChanges && (

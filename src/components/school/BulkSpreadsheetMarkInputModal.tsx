@@ -430,29 +430,34 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
     const startIdx = entries.findIndex((s) => s.studentId === startStudentId);
     if (startIdx === -1) return;
 
+    const compIdx = components.findIndex((c) => c.id === compId);
+
     let appliedCount = 0;
     setEntries((prev) => {
       const next = [...prev];
       for (let i = 0; i < parsedRows.length && startIdx + i < next.length; i++) {
         const row = parsedRows[i];
         if (!row || row.length === 0) continue;
-        const cellRaw = row[0];
-        const num = parseFloat(cellRaw.replace(/[^0-9.-]/g, ''));
-        if (!isNaN(num)) {
-          const clamped = Math.max(0, Math.min(max, num));
-          const targetStudent = next[startIdx + i];
+        const targetStudent = next[startIdx + i];
 
-          if (compId === 'FINAL_SCORE' || components.length === 0) {
-            next[startIdx + i] = {
-              ...targetStudent,
-              score: clamped,
-              weightedTotal: clamped,
-            };
-          } else {
-            const nextComps = {
-              ...(targetStudent.componentScores || {}),
-              [compId]: clamped,
-            };
+        if (row.length > 1 && components.length > 0 && compIdx !== -1) {
+          // Multi-column paste across assessment components starting from compIdx
+          const nextComps = { ...(targetStudent.componentScores || {}) };
+          let rowModified = false;
+
+          row.forEach((cellVal, cOffset) => {
+            const targetCIdx = compIdx + cOffset;
+            if (targetCIdx < components.length) {
+              const targetComp = components[targetCIdx];
+              const num = parseFloat(cellVal.replace(/[^0-9.-]/g, ''));
+              if (!isNaN(num)) {
+                nextComps[targetComp.id] = Math.max(0, Math.min(targetComp.maxScore, num));
+                rowModified = true;
+              }
+            }
+          });
+
+          if (rowModified) {
             const result = computeStudentSubjectResult(nextComps, currentSubject || null);
             next[startIdx + i] = {
               ...targetStudent,
@@ -460,8 +465,36 @@ export const BulkSpreadsheetMarkInputModal: React.FC<BulkSpreadsheetMarkInputMod
               score: result.finalPercentage !== null ? result.finalPercentage : targetStudent.score,
               weightedTotal: result.finalPercentage,
             };
+            appliedCount++;
           }
-          appliedCount++;
+        } else {
+          // Single column paste downwards
+          const cellRaw = row[0];
+          const num = parseFloat(cellRaw.replace(/[^0-9.-]/g, ''));
+          if (!isNaN(num)) {
+            const clamped = Math.max(0, Math.min(max, num));
+
+            if (compId === 'FINAL_SCORE' || components.length === 0) {
+              next[startIdx + i] = {
+                ...targetStudent,
+                score: clamped,
+                weightedTotal: clamped,
+              };
+            } else {
+              const nextComps = {
+                ...(targetStudent.componentScores || {}),
+                [compId]: clamped,
+              };
+              const result = computeStudentSubjectResult(nextComps, currentSubject || null);
+              next[startIdx + i] = {
+                ...targetStudent,
+                componentScores: nextComps,
+                score: result.finalPercentage !== null ? result.finalPercentage : targetStudent.score,
+                weightedTotal: result.finalPercentage,
+              };
+            }
+            appliedCount++;
+          }
         }
       }
       return next;
