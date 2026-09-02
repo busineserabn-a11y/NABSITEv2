@@ -2539,6 +2539,70 @@ export const api = {
     }
   },
 
+  bulkCreateStudents: async (
+    companyId: string,
+    studentList: Array<{
+      fullName: string;
+      admissionNo?: string;
+      gradeId: string;
+      sectionId: string;
+      academicYearId?: string;
+      gender?: 'male' | 'female' | 'other';
+      dateOfBirth?: string;
+      guardianName?: string;
+      guardianPhone?: string;
+      guardianEmail?: string;
+      notes?: string;
+    }>
+  ): Promise<{ addedCount: number; students: Student[] }> => {
+    if (!studentList || studentList.length === 0) {
+      return { addedCount: 0, students: [] };
+    }
+
+    const nowIso = new Date().toISOString();
+    const created: Student[] = [];
+
+    // Firestore batch supports up to 500 writes per batch
+    const BATCH_SIZE = 400;
+    for (let i = 0; i < studentList.length; i += BATCH_SIZE) {
+      const chunk = studentList.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(firestoreDb);
+
+      for (let j = 0; j < chunk.length; j++) {
+        const item = chunk[j];
+        const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const id = `GG_STU_${Date.now()}_${i + j}_${randomSuffix}`;
+        const docRef = doc(firestoreDb, 'students', id);
+
+        const payload: Student = {
+          id,
+          companyId,
+          fullName: item.fullName.trim(),
+          admissionNo: item.admissionNo?.trim() || `FAN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+          gender: item.gender || 'male',
+          dateOfBirth: item.dateOfBirth || '',
+          gradeId: item.gradeId,
+          sectionId: item.sectionId,
+          academicYearId: item.academicYearId || '',
+          status: 'active',
+          guardianName: item.guardianName || '',
+          guardianPhone: item.guardianPhone || '',
+          guardianEmail: item.guardianEmail || '',
+          notes: item.notes || '',
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+
+        batch.set(docRef, payload);
+        created.push(payload);
+      }
+
+      await withTimeout(batch.commit(), 12000);
+    }
+
+    return { addedCount: created.length, students: created };
+  },
+
   updateStudent: async (id: string, data: Partial<Student>): Promise<Student> => {
     const docRef = doc(firestoreDb, 'students', id);
     const updatePayload = {

@@ -13,12 +13,15 @@ import {
   X,
   GraduationCap,
   Layers,
+  Upload,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Student, Grade, Section, AcademicYear, Company } from '../../types';
 import { api } from '../../lib/api';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { StudentUploadModal } from './StudentUploadModal';
 
 interface SchoolStudentsViewProps {
   company: Company;
@@ -44,6 +47,7 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [formData, setFormData] = useState({
     fullName: '',
@@ -224,9 +228,21 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
           </p>
         </div>
 
-        <Button variant="primary" size="md" icon={Plus} onClick={openCreateModal}>
-          Register Student
-        </Button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Button
+            variant="outline"
+            size="md"
+            icon={Upload}
+            onClick={() => setUploadModalOpen(true)}
+            className="text-xs bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100"
+          >
+            Upload Students (CSV / Excel)
+          </Button>
+
+          <Button variant="primary" size="md" icon={Plus} onClick={openCreateModal}>
+            Register Student
+          </Button>
+        </div>
       </div>
 
       {/* Filter Bar */}
@@ -576,6 +592,17 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Student Bulk Upload Modal */}
+      <StudentUploadModal
+        isOpen={uploadModalOpen}
+        onClose={() => setUploadModalOpen(false)}
+        company={company}
+        academicYears={academicYears}
+        grades={grades}
+        sections={sections}
+        onUploadSuccess={onRefresh}
+      />
     </div>
   );
 };
