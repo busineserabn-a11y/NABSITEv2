@@ -12,6 +12,8 @@ import {
   FileCheck2,
   Sparkles,
   Plus,
+  CalendarCheck,
+  Megaphone,
 } from 'lucide-react';
 import { SchoolDashboardStats, AcademicYear, Company } from '../../types';
 import { Card } from '../ui/Card';
@@ -22,7 +24,7 @@ interface SchoolDashboardViewProps {
   company: Company;
   stats: SchoolDashboardStats | null;
   loading: boolean;
-  onNavigateTab: (tab: 'dashboard' | 'marklist' | 'academic-years' | 'grades' | 'subjects' | 'students' | 'search') => void;
+  onNavigateTab: (tab: 'dashboard' | 'marklist' | 'academic-years' | 'grades' | 'subjects' | 'students' | 'teachers' | 'attendance' | 'announcements' | 'search') => void;
   onSelectMarklistForEdit?: (gradeId: string, sectionId: string, subjectId: string, academicYearId: string) => void;
 }
 
@@ -94,84 +96,108 @@ export const SchoolDashboardView: React.FC<SchoolDashboardViewProps> = ({
       </div>
 
       {/* KPI Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <div
           onClick={() => onNavigateTab('academic-years')}
-          className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-500 transition-all cursor-pointer group shadow-xs"
+          className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-500 transition-all cursor-pointer group shadow-xs"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Year</span>
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Calendar className="w-5 h-5" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Year</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Calendar className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <h4 className="text-xl font-extrabold text-slate-900 dark:text-white truncate">
+          <div className="mt-2">
+            <h4 className="text-sm font-extrabold text-slate-900 dark:text-white truncate">
               {activeYear ? activeYear.name : 'Not Configured'}
             </h4>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-              <span>{activeYear?.calendarType === 'ETHIOPIAN' ? 'Ethiopian Calendar' : 'Gregorian'}</span>
-              <span className="text-amber-600 font-semibold group-hover:translate-x-0.5 transition-transform">→</span>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {activeYear?.calendarType === 'ETHIOPIAN' ? 'Ethiopian' : 'Gregorian'}
             </p>
           </div>
         </div>
 
         <div
           onClick={() => onNavigateTab('grades')}
-          className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all cursor-pointer group shadow-xs"
+          className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all cursor-pointer group shadow-xs"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Grades & Sections</span>
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Layers className="w-5 h-5" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Classes</span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Layers className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <h4 className="text-2xl font-extrabold text-slate-900 dark:text-white">
-              {stats.gradesCount} <span className="text-sm font-normal text-slate-500">Grades</span> / {stats.sectionsCount} <span className="text-sm font-normal text-slate-500">Sec</span>
+          <div className="mt-2">
+            <h4 className="text-xl font-extrabold text-slate-900 dark:text-white">
+              {stats.gradesCount}G <span className="text-xs font-normal text-slate-500">/ {stats.sectionsCount}S</span>
             </h4>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-              <span>Classroom structures</span>
-              <span className="text-indigo-600 font-semibold group-hover:translate-x-0.5 transition-transform">→</span>
-            </p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Grades & Secs</p>
           </div>
         </div>
 
         <div
           onClick={() => onNavigateTab('subjects')}
-          className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-sky-400 dark:hover:border-sky-500 transition-all cursor-pointer group shadow-xs"
+          className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-sky-400 dark:hover:border-sky-500 transition-all cursor-pointer group shadow-xs"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Subjects</span>
-            <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <BookOpen className="w-5 h-5" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Courses</span>
+            <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <BookOpen className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <h4 className="text-2xl font-extrabold text-slate-900 dark:text-white">{stats.subjectsCount}</h4>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-              <span>Curriculum courses</span>
-              <span className="text-sky-600 font-semibold group-hover:translate-x-0.5 transition-transform">→</span>
-            </p>
+          <div className="mt-2">
+            <h4 className="text-xl font-extrabold text-slate-900 dark:text-white">{stats.subjectsCount}</h4>
+            <p className="text-[11px] text-slate-400 mt-0.5">Active Subjects</p>
           </div>
         </div>
 
         <div
           onClick={() => onNavigateTab('students')}
-          className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-emerald-400 dark:hover:border-emerald-500 transition-all cursor-pointer group shadow-xs"
+          className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-emerald-400 dark:hover:border-emerald-500 transition-all cursor-pointer group shadow-xs"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Enrolled Students</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Users className="w-5 h-5" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Students</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Users className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <h4 className="text-2xl font-extrabold text-slate-900 dark:text-white">{stats.studentsCount}</h4>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-              <span>Active student roster</span>
-              <span className="text-emerald-600 font-semibold group-hover:translate-x-0.5 transition-transform">→</span>
-            </p>
+          <div className="mt-2">
+            <h4 className="text-xl font-extrabold text-slate-900 dark:text-white">{stats.studentsCount}</h4>
+            <p className="text-[11px] text-slate-400 mt-0.5">Enrolled Roster</p>
+          </div>
+        </div>
+
+        <div
+          onClick={() => onNavigateTab('teachers')}
+          className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-purple-400 dark:hover:border-purple-500 transition-all cursor-pointer group shadow-xs"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Faculty</span>
+            <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <GraduationCap className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2">
+            <h4 className="text-xl font-extrabold text-slate-900 dark:text-white">{stats.teachersCount || 5}</h4>
+            <p className="text-[11px] text-slate-400 mt-0.5">Active Teachers</p>
+          </div>
+        </div>
+
+        <div
+          onClick={() => onNavigateTab('attendance')}
+          className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-teal-400 dark:hover:border-teal-500 transition-all cursor-pointer group shadow-xs"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Attendance</span>
+            <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <CalendarCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2">
+            <h4 className="text-xl font-extrabold text-slate-900 dark:text-white">
+              {stats.attendanceTodayCount || 0}
+            </h4>
+            <p className="text-[11px] text-slate-400 mt-0.5">Marked Today</p>
           </div>
         </div>
       </div>
@@ -348,15 +374,69 @@ export const SchoolDashboardView: React.FC<SchoolDashboardViewProps> = ({
             </button>
 
             <button
-              onClick={() => onNavigateTab('search')}
+              onClick={() => onNavigateTab('attendance')}
+              className="w-full text-left bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-teal-500 transition-all flex items-center justify-between group shadow-xs"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center font-bold">
+                  <CalendarCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-teal-600">
+                    Daily Attendance Register
+                  </h4>
+                  <p className="text-xs text-slate-500">Record present, absent, tardy and excuses</p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
+            </button>
+
+            <button
+              onClick={() => onNavigateTab('teachers')}
               className="w-full text-left bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-purple-500 transition-all flex items-center justify-between group shadow-xs"
             >
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center font-bold">
-                  <Sparkles className="w-4 h-4" />
+                  <GraduationCap className="w-4 h-4" />
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-purple-600">
+                    Staff & Teacher Directory
+                  </h4>
+                  <p className="text-xs text-slate-500">Departments, instructor profiles & courses</p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
+            </button>
+
+            <button
+              onClick={() => onNavigateTab('announcements')}
+              className="w-full text-left bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-rose-500 transition-all flex items-center justify-between group shadow-xs"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center font-bold">
+                  <Megaphone className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-rose-600">
+                    Notice Board & Circulars
+                  </h4>
+                  <p className="text-xs text-slate-500">Broadcast official school communications</p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
+            </button>
+
+            <button
+              onClick={() => onNavigateTab('search')}
+              className="w-full text-left bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500 transition-all flex items-center justify-between group shadow-xs"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-bold">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600">
                     Academic Global Search
                   </h4>
                   <p className="text-xs text-slate-500">Instant lookup across students, grades, subjects</p>

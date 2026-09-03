@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import {
   GraduationCap,
   LayoutDashboard,
@@ -15,8 +15,13 @@ import {
   Building2,
   Sparkles,
   RefreshCw,
+  CalendarCheck,
+  Megaphone,
+  ShieldAlert,
+  ArrowLeft,
 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import {
   Company,
   AcademicYear,
@@ -32,6 +37,9 @@ import { SchoolAcademicYearsView } from '../../components/school/SchoolAcademicY
 import { SchoolGradesSectionsView } from '../../components/school/SchoolGradesSectionsView';
 import { SchoolSubjectsView } from '../../components/school/SchoolSubjectsView';
 import { SchoolStudentsView } from '../../components/school/SchoolStudentsView';
+import { SchoolAttendanceView } from '../../components/school/SchoolAttendanceView';
+import { SchoolTeachersView } from '../../components/school/SchoolTeachersView';
+import { SchoolAnnouncementsView } from '../../components/school/SchoolAnnouncementsView';
 import { SchoolGlobalSearchView } from '../../components/school/SchoolGlobalSearchView';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -43,12 +51,48 @@ type AcademicTab =
   | 'grades'
   | 'subjects'
   | 'students'
+  | 'attendance'
+  | 'teachers'
+  | 'announcements'
   | 'search';
 
 export const SchoolAcademicHubPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
+
   const [company, setCompany] = useState<Company | null>(null);
-  const [activeTab, setActiveTab] = useState<AcademicTab>('dashboard');
+
+  // Tab initialization from URL query parameter
+  const tabFromUrl = searchParams.get('tab') as AcademicTab | null;
+  const validTabs: AcademicTab[] = [
+    'dashboard',
+    'marklist',
+    'academic-years',
+    'grades',
+    'subjects',
+    'students',
+    'attendance',
+    'teachers',
+    'announcements',
+    'search',
+  ];
+  const initialTab: AcademicTab = tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'dashboard';
+
+  const [activeTab, setActiveTab] = useState<AcademicTab>(initialTab);
+
+  // Update URL search params whenever activeTab changes
+  const handleTabChange = (tab: AcademicTab) => {
+    setActiveTab(tab);
+    setSearchParams({ tab }, { replace: true });
+  };
+
+  // Sync if URL param changes externally
+  useEffect(() => {
+    if (tabFromUrl && validTabs.includes(tabFromUrl) && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
 
   // Academic Entities
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
@@ -118,12 +162,12 @@ export const SchoolAcademicHubPage: React.FC = () => {
 
   const handleOpenMarklistForSection = (gradeId: string, sectionId: string) => {
     setMarklistInitialSelection((prev) => ({ ...prev, gradeId, sectionId }));
-    setActiveTab('marklist');
+    handleTabChange('marklist');
   };
 
   const handleOpenMarklistForSubject = (subjectId: string) => {
     setMarklistInitialSelection((prev) => ({ ...prev, subjectId }));
-    setActiveTab('marklist');
+    handleTabChange('marklist');
   };
 
   if (loading || !company) {
@@ -133,6 +177,51 @@ export const SchoolAcademicHubPage: React.FC = () => {
         <p className="text-sm font-semibold">Loading Academic Management Workstation...</p>
       </div>
     );
+  }
+
+  // Strict Tenant & Sub-Admin Isolation Check
+  const isGaraGuriSchool =
+    company.id === 'comp_gara_guri' ||
+    company.slug === 'gara-guri-school' ||
+    company.name.toLowerCase().includes('gara guri');
+
+  if (user && user.role === 'SUB_ADMIN') {
+    const isAssigned =
+      user.assignedCompanyId === company.id ||
+      user.assignedCompanyIds?.includes(company.id);
+
+    if (!isAssigned || !isGaraGuriSchool) {
+      return (
+        <div className="max-w-2xl mx-auto py-16 px-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-rose-200 dark:border-rose-900/40 p-8 text-center space-y-5 shadow-lg">
+            <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 mx-auto flex items-center justify-center">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+                Academic Hub Access Restricted
+              </h2>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-2 max-w-lg mx-auto">
+                The School Academic Hub is reserved exclusively for authenticated <strong>SUB_ADMIN</strong> staff assigned to <strong>Gara Guri Secondary School</strong>.
+              </p>
+              <div className="mt-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-left space-y-1">
+                <p><span className="font-bold text-slate-500">Your User ID:</span> <span className="font-mono">{user.id}</span></p>
+                <p><span className="font-bold text-slate-500">Your Role:</span> <span className="font-mono">{user.role}</span></p>
+                <p><span className="font-bold text-slate-500">Assigned Company:</span> <span className="font-mono">{user.assignedCompanyId || 'None'}</span></p>
+                <p><span className="font-bold text-slate-500">Requested Hub:</span> <span className="font-mono">{company.name} ({company.id})</span></p>
+              </div>
+            </div>
+            <div className="pt-2 flex items-center justify-center gap-3">
+              <Link to={user.assignedCompanyId ? `/company/${user.assignedCompanyId}` : '/login'}>
+                <Button variant="primary" icon={ArrowLeft}>
+                  Return to My Assigned Dashboard
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
   }
 
   const activeAcademicYear = academicYears.find((y) => y.isActive) || academicYears[0];
@@ -154,7 +243,7 @@ export const SchoolAcademicHubPage: React.FC = () => {
                 {company.name}
               </h1>
               <Badge variant="info" size="sm">
-                School Workstation
+                Academic Hub
               </Badge>
               {activeAcademicYear && (
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
@@ -197,10 +286,10 @@ export const SchoolAcademicHubPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Primary Navigation Tabs (The 6 Core Features) */}
+      {/* 2. Primary Navigation Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800">
         <button
-          onClick={() => setActiveTab('dashboard')}
+          onClick={() => handleTabChange('dashboard')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'dashboard'
               ? 'bg-amber-500 text-slate-950 shadow-sm'
@@ -212,7 +301,7 @@ export const SchoolAcademicHubPage: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('marklist')}
+          onClick={() => handleTabChange('marklist')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'marklist'
               ? 'bg-amber-500 text-slate-950 shadow-sm'
@@ -220,47 +309,11 @@ export const SchoolAcademicHubPage: React.FC = () => {
           }`}
         >
           <FileCheck2 className="w-4 h-4" />
-          <span>Marklist Sheet</span>
+          <span>Marklist Sheet (2.0)</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('academic-years')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
-            activeTab === 'academic-years'
-              ? 'bg-amber-500 text-slate-950 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Calendar className="w-4 h-4" />
-          <span>Academic Year ({academicYears.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('grades')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
-            activeTab === 'grades'
-              ? 'bg-amber-500 text-slate-950 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>Grades & Sections ({grades.length}G / {sections.length}S)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('subjects')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
-            activeTab === 'subjects'
-              ? 'bg-amber-500 text-slate-950 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span>Subjects ({subjects.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('students')}
+          onClick={() => handleTabChange('students')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'students'
               ? 'bg-amber-500 text-slate-950 shadow-sm'
@@ -272,7 +325,79 @@ export const SchoolAcademicHubPage: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('search')}
+          onClick={() => handleTabChange('attendance')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
+            activeTab === 'attendance'
+              ? 'bg-amber-500 text-slate-950 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <CalendarCheck className="w-4 h-4" />
+          <span>Class Attendance</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('teachers')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
+            activeTab === 'teachers'
+              ? 'bg-amber-500 text-slate-950 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <GraduationCap className="w-4 h-4" />
+          <span>Staff & Teachers</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('announcements')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
+            activeTab === 'announcements'
+              ? 'bg-amber-500 text-slate-950 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Megaphone className="w-4 h-4" />
+          <span>Notice Board</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('academic-years')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
+            activeTab === 'academic-years'
+              ? 'bg-amber-500 text-slate-950 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          <span>Academic Year ({academicYears.length})</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('grades')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
+            activeTab === 'grades'
+              ? 'bg-amber-500 text-slate-950 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Grades & Sections ({grades.length}G / {sections.length}S)</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('subjects')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
+            activeTab === 'subjects'
+              ? 'bg-amber-500 text-slate-950 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          <span>Subjects ({subjects.length})</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('search')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'search'
               ? 'bg-amber-500 text-slate-950 shadow-sm'
@@ -291,7 +416,7 @@ export const SchoolAcademicHubPage: React.FC = () => {
             company={company}
             stats={stats}
             loading={loading}
-            onNavigateTab={(tab) => setActiveTab(tab)}
+            onNavigateTab={(tab) => handleTabChange(tab)}
           />
         )}
 
@@ -303,6 +428,45 @@ export const SchoolAcademicHubPage: React.FC = () => {
             sections={sections}
             subjects={subjects}
             initialSelection={marklistInitialSelection}
+          />
+        )}
+
+        {activeTab === 'students' && (
+          <SchoolStudentsView
+            company={company}
+            students={students}
+            grades={grades}
+            sections={sections}
+            academicYears={academicYears}
+            onRefresh={handleRefresh}
+          />
+        )}
+
+        {activeTab === 'attendance' && (
+          <SchoolAttendanceView
+            company={company}
+            grades={grades}
+            sections={sections}
+            students={students}
+            academicYears={academicYears}
+            onRefresh={handleRefresh}
+          />
+        )}
+
+        {activeTab === 'teachers' && (
+          <SchoolTeachersView
+            company={company}
+            subjects={subjects}
+            grades={grades}
+            sections={sections}
+            onRefresh={handleRefresh}
+          />
+        )}
+
+        {activeTab === 'announcements' && (
+          <SchoolAnnouncementsView
+            company={company}
+            onRefresh={handleRefresh}
           />
         )}
 
@@ -335,24 +499,14 @@ export const SchoolAcademicHubPage: React.FC = () => {
           />
         )}
 
-        {activeTab === 'students' && (
-          <SchoolStudentsView
-            company={company}
-            students={students}
-            grades={grades}
-            sections={sections}
-            academicYears={academicYears}
-            onRefresh={handleRefresh}
-          />
-        )}
-
         {activeTab === 'search' && (
           <SchoolGlobalSearchView
             company={company}
-            onNavigateTab={(tab) => setActiveTab(tab)}
+            onNavigateTab={(tab) => handleTabChange(tab)}
           />
         )}
       </div>
     </div>
   );
 };
+

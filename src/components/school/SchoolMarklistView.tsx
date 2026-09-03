@@ -251,6 +251,76 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
     }
   };
 
+  // Direct In-Cell Multi-Cell Paste (Excel / Google Sheets Ctrl+V)
+  const handleCellPaste = (
+    e: React.ClipboardEvent<HTMLInputElement>,
+    rowIndex: number,
+    componentId?: string
+  ) => {
+    const text = e.clipboardData.getData('text');
+    if (!text || (!text.includes('\n') && !text.includes('\t'))) {
+      // Single value paste, default native behavior
+      return;
+    }
+
+    e.preventDefault();
+    const rows = text
+      .split(/\r\n|\n|\r/)
+      .filter((line) => line.trim() !== '')
+      .map((line) => line.split('\t').map((cell) => cell.trim()));
+
+    if (rows.length === 0) return;
+
+    setEntries((prev) => {
+      const updated = [...prev];
+      rows.forEach((rowCols, rOffset) => {
+        const targetRowIndex = rowIndex + rOffset;
+        if (targetRowIndex >= updated.length) return;
+
+        const targetEntry = { ...updated[targetRowIndex] };
+
+        if (components.length > 0) {
+          // If we have component assessments
+          const compScores = { ...(targetEntry.componentScores || {}) };
+          if (componentId) {
+            const startCompIdx = components.findIndex((c) => c.id === componentId);
+            if (rowCols.length > 1) {
+              // Multi-column row paste
+              rowCols.forEach((cellVal, cOffset) => {
+                const compIdx = startCompIdx + cOffset;
+                if (compIdx < components.length) {
+                  const num = parseFloat(cellVal);
+                  if (!isNaN(num)) {
+                    compScores[components[compIdx].id] = Math.max(0, Math.min(components[compIdx].maxScore, num));
+                  }
+                }
+              });
+            } else {
+              // Single column down rows
+              const num = parseFloat(rowCols[0]);
+              if (!isNaN(num)) {
+                compScores[componentId] = Math.max(0, Math.min(components[startCompIdx]?.maxScore || 100, num));
+              }
+            }
+          }
+          targetEntry.componentScores = compScores;
+        } else {
+          // Single score column down rows
+          const num = parseFloat(rowCols[0]);
+          if (!isNaN(num)) {
+            targetEntry.score = Math.max(0, Math.min(maxScore, num));
+          }
+        }
+
+        updated[targetRowIndex] = targetEntry;
+      });
+
+      return updated;
+    });
+
+    setHasUnsavedChanges(true);
+  };
+
   // Quick helper: Compute grade letter from score & max
   const getLetterGrade = (score: number | null, max: number) => {
     if (score === null || score === undefined) return { label: '—', color: 'text-slate-400' };
@@ -412,7 +482,8 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
               size="md"
               icon={FileSpreadsheet}
               onClick={() => setViewMode('spreadsheet2')}
-              className="text-xs bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800 hover:bg-sky-100 font-bold"
+              className="text-xs bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800 hover:bg-sky-100 font-bold"
+              title="Switch to full-screen grid spreadsheet interface"
             >
               Spreadsheet 2.0 Mode
             </Button>
@@ -420,11 +491,12 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
             <Button
               variant="outline"
               size="md"
-              icon={FileSpreadsheet}
+              icon={Sparkles}
               onClick={() => setBulkModalOpen(true)}
-              className="text-xs text-slate-600 dark:text-slate-300"
+              className="text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100 font-bold"
+              title="Open Bulk Paste 2.0 Wizard to copy & paste columns from Excel or Google Sheets"
             >
-              Quick Modal
+              Bulk Paste 2.0 (Excel/Sheets)
             </Button>
 
             {hasUnsavedChanges && (
@@ -753,6 +825,8 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
                                   onChange={(e) =>
                                     handleComponentScoreChange(item.studentId, comp.id, e.target.value)
                                   }
+                                  onPaste={(e) => handleCellPaste(e, index, comp.id)}
+                                  title="Type score or paste rows from Excel (Ctrl+V)"
                                   className={`w-16 h-8 text-center bg-white dark:bg-slate-800 border-2 rounded-lg text-xs font-extrabold focus:outline-none ${
                                     isExceeded
                                       ? 'border-rose-500 text-rose-600'
@@ -775,6 +849,8 @@ export const SchoolMarklistView: React.FC<SchoolMarklistViewProps> = ({
                               placeholder="—"
                               value={item.score !== null && item.score !== undefined ? item.score : ''}
                               onChange={(e) => handleScoreChange(item.studentId, e.target.value)}
+                              onPaste={(e) => handleCellPaste(e, index)}
+                              title="Type score or paste column of numbers from Excel (Ctrl+V)"
                               className="w-20 h-9 text-center bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-sm font-extrabold text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
                             />
                             <span className="text-slate-400 font-bold text-xs">/ {maxScore}</span>

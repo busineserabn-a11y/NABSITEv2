@@ -40,6 +40,8 @@ import {
   Terminal,
   GraduationCap,
   FileCheck2,
+  CalendarCheck,
+  BookOpen,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
@@ -217,22 +219,87 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     // SUB_ADMIN Role
+    const assignedId = user.assignedCompanyId || '';
+    const userCompany = companies.find((c) => c.id === assignedId);
+    const isGaraGuriAssigned =
+      assignedId === 'comp_gara_guri' ||
+      userCompany?.id === 'comp_gara_guri' ||
+      userCompany?.slug === 'gara-guri-school' ||
+      userCompany?.name?.toLowerCase().includes('gara guri');
+
+    if (isGaraGuriAssigned) {
+      return [
+        {
+          section: 'School Academic Hub',
+          items: [
+            {
+              label: 'Academic Hub',
+              href: `/company/${assignedId}/academic`,
+              icon: GraduationCap,
+              badge: 'Primary',
+              badgeColor: 'bg-amber-500/20 text-amber-600 dark:text-amber-400',
+            },
+            {
+              label: 'Marklist Sheet (2.0)',
+              href: `/company/${assignedId}/academic?tab=marklist`,
+              icon: FileCheck2,
+            },
+            {
+              label: 'Students Roster',
+              href: `/company/${assignedId}/academic?tab=students`,
+              icon: Users,
+            },
+            {
+              label: 'Class Attendance',
+              href: `/company/${assignedId}/academic?tab=attendance`,
+              icon: CalendarCheck,
+            },
+            {
+              label: 'Faculty & Teachers',
+              href: `/company/${assignedId}/academic?tab=teachers`,
+              icon: GraduationCap,
+            },
+            {
+              label: 'Notice Board',
+              href: `/company/${assignedId}/academic?tab=announcements`,
+              icon: Megaphone,
+            },
+            {
+              label: 'Grades & Sections',
+              href: `/company/${assignedId}/academic?tab=grades`,
+              icon: Layers,
+            },
+            {
+              label: 'Subjects Catalogue',
+              href: `/company/${assignedId}/academic?tab=subjects`,
+              icon: BookOpen,
+            },
+          ],
+        },
+        {
+          section: 'School Digital Portal',
+          items: [
+            { label: 'School Overview', href: `/company/${assignedId}`, icon: Store },
+            ...(hasPermission('edit_website')
+              ? [{ label: 'School Website Studio', href: `/studio/${assignedId}`, icon: Globe }]
+              : []),
+            ...(hasPermission('manage_qr')
+              ? [{ label: 'Campus QR Stand', href: `/company/${assignedId}/qr`, icon: QrCode }]
+              : []),
+            ...(hasPermission('moderate_reviews')
+              ? [{ label: 'Parent & Student Reviews', href: `/company/${assignedId}/reviews`, icon: MessageSquare }]
+              : []),
+            ...(hasPermission('manage_hours') || hasPermission('edit_business_info')
+              ? [{ label: 'School Profile & Hours', href: `/company/${assignedId}/profile`, icon: Clock }]
+              : []),
+          ],
+        },
+      ];
+    }
+
     const subAdminItems: NavItem[] = [
       { label: 'Company Overview', href: `/company/${user.assignedCompanyId || ''}`, icon: Store },
     ];
-
-    if (activeCompany?.category === 'Schools' || user.assignedCompanyId?.startsWith('sch_')) {
-      subAdminItems.push({
-        label: 'Academic Workstation',
-        href: `/company/${user.assignedCompanyId || ''}/academic`,
-        icon: GraduationCap,
-      });
-      subAdminItems.push({
-        label: 'Student Marklists',
-        href: `/company/${user.assignedCompanyId || ''}/marklist`,
-        icon: FileCheck2,
-      });
-    }
 
     if (hasPermission('edit_website')) {
       subAdminItems.push({ label: 'Website Studio', href: `/studio/${user.assignedCompanyId || ''}`, icon: Globe });

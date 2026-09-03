@@ -44,6 +44,10 @@ import {
   Marklist,
   SchoolDashboardStats,
   SchoolSearchResult,
+  Teacher,
+  AttendanceSession,
+  StudentAttendanceEntry,
+  SchoolAnnouncement,
 } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_SETTINGS, INITIAL_COMPANIES, INITIAL_WEBSITES, INITIAL_ANNOUNCEMENTS } from '../data/seed';
 import {
@@ -53,6 +57,8 @@ import {
   INITIAL_SUBJECTS,
   INITIAL_STUDENTS,
   INITIAL_MARKLISTS,
+  INITIAL_TEACHERS,
+  INITIAL_SCHOOL_ANNOUNCEMENTS,
 } from '../data/schoolSeed';
 import { THEME_REGISTRY } from '../data/themes';
 import { FEATURE_REGISTRY } from '../data/features';
@@ -2919,16 +2925,250 @@ export const api = {
     }
   },
 
-  // --- 7. School Dashboard Stats & Search ---
+  // --- 7. Teacher / Staff Management ---
+  getTeachers: async (companyId: string): Promise<Teacher[]> => {
+    try {
+      const q = query(
+        collection(firestoreDb, 'teachers'),
+        where('companyId', '==', companyId)
+      );
+      const snap = await withTimeout(getDocs(q), 6000);
+      if (!snap.empty) {
+        return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Teacher));
+      }
+      return INITIAL_TEACHERS.filter((t) => t.companyId === companyId);
+    } catch (err) {
+      logError('getTeachers', err, { companyId });
+      return INITIAL_TEACHERS.filter((t) => t.companyId === companyId);
+    }
+  },
+
+  getTeacher: async (id: string): Promise<Teacher | null> => {
+    try {
+      const docRef = doc(firestoreDb, 'teachers', id);
+      const snap = await withTimeout(getDoc(docRef), 5000);
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() } as Teacher;
+      }
+      return INITIAL_TEACHERS.find((t) => t.id === id) || null;
+    } catch (err) {
+      logError('getTeacher', err, { id });
+      return INITIAL_TEACHERS.find((t) => t.id === id) || null;
+    }
+  },
+
+  createTeacher: async (companyId: string, data: Partial<Teacher>): Promise<Teacher> => {
+    const nowIso = new Date().toISOString();
+    const id = data.id || `tch_${companyId.replace('comp_', '')}_${Date.now()}`;
+    const newTeacher: Teacher = {
+      id,
+      companyId,
+      fullName: data.fullName || 'New Teacher',
+      employeeId: data.employeeId || `T-${Date.now().toString().slice(-4)}`,
+      email: data.email || '',
+      phone: data.phone || '',
+      gender: data.gender || 'male',
+      subjectIds: data.subjectIds || [],
+      gradeIds: data.gradeIds || [],
+      sectionIds: data.sectionIds || [],
+      qualification: data.qualification || '',
+      department: data.department || 'General Academic',
+      status: data.status || 'active',
+      joinedDate: data.joinedDate || nowIso.substring(0, 10),
+      notes: data.notes || '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      await withTimeout(setDoc(doc(firestoreDb, 'teachers', id), newTeacher), 8000);
+      return newTeacher;
+    } catch (err) {
+      logError('createTeacher', err, { companyId, id });
+      throw new ApiError(500, 'Failed to create teacher');
+    }
+  },
+
+  updateTeacher: async (id: string, data: Partial<Teacher>): Promise<Teacher> => {
+    const nowIso = new Date().toISOString();
+    const updatePayload = { ...data, updatedAt: nowIso };
+    try {
+      await withTimeout(updateDoc(doc(firestoreDb, 'teachers', id), updatePayload), 8000);
+      const updated = await api.getTeacher(id);
+      return updated!;
+    } catch (err) {
+      logError('updateTeacher', err, { id });
+      throw new ApiError(500, 'Failed to update teacher');
+    }
+  },
+
+  deleteTeacher: async (id: string): Promise<void> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'teachers', id)), 8000);
+    } catch (err) {
+      logError('deleteTeacher', err, { id });
+      throw new ApiError(500, 'Failed to delete teacher');
+    }
+  },
+
+  // --- 8. Class Attendance Management ---
+  getAttendanceSession: async (
+    companyId: string,
+    gradeId: string,
+    sectionId: string,
+    date: string
+  ): Promise<AttendanceSession | null> => {
+    try {
+      const sessionId = `att_${companyId}_${gradeId}_${sectionId}_${date}`;
+      const docRef = doc(firestoreDb, 'attendance', sessionId);
+      const snap = await withTimeout(getDoc(docRef), 5000);
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() } as AttendanceSession;
+      }
+      return null;
+    } catch (err) {
+      logError('getAttendanceSession', err, { companyId, gradeId, sectionId, date });
+      return null;
+    }
+  },
+
+  saveAttendanceSession: async (session: AttendanceSession): Promise<AttendanceSession> => {
+    const nowIso = new Date().toISOString();
+    const sessionId = session.id || `att_${session.companyId}_${session.gradeId}_${session.sectionId}_${session.date}`;
+    const payload: AttendanceSession = {
+      ...session,
+      id: sessionId,
+      updatedAt: nowIso,
+      createdAt: session.createdAt || nowIso,
+    };
+
+    try {
+      await withTimeout(setDoc(doc(firestoreDb, 'attendance', sessionId), payload, { merge: true }), 8000);
+      return payload;
+    } catch (err) {
+      logError('saveAttendanceSession', err, { sessionId });
+      throw new ApiError(500, 'Failed to save attendance record');
+    }
+  },
+
+  getAttendanceHistory: async (
+    companyId: string,
+    gradeId?: string,
+    sectionId?: string,
+    limitCount: number = 30
+  ): Promise<AttendanceSession[]> => {
+    try {
+      let q = query(
+        collection(firestoreDb, 'attendance'),
+        where('companyId', '==', companyId),
+        limit(limitCount)
+      );
+      if (gradeId) {
+        q = query(q, where('gradeId', '==', gradeId));
+      }
+      if (sectionId) {
+        q = query(q, where('sectionId', '==', sectionId));
+      }
+      const snap = await withTimeout(getDocs(q), 6000);
+      if (!snap.empty) {
+        return snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as AttendanceSession))
+          .sort((a, b) => b.date.localeCompare(a.date));
+      }
+      return [];
+    } catch (err) {
+      logError('getAttendanceHistory', err, { companyId, gradeId, sectionId });
+      return [];
+    }
+  },
+
+  // --- 9. School Announcements / Notice Board ---
+  getSchoolAnnouncements: async (companyId: string): Promise<SchoolAnnouncement[]> => {
+    try {
+      const q = query(
+        collection(firestoreDb, 'schoolAnnouncements'),
+        where('companyId', '==', companyId)
+      );
+      const snap = await withTimeout(getDocs(q), 6000);
+      if (!snap.empty) {
+        return snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as SchoolAnnouncement))
+          .sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0) || b.publishDate.localeCompare(a.publishDate));
+      }
+      return INITIAL_SCHOOL_ANNOUNCEMENTS.filter((a) => a.companyId === companyId);
+    } catch (err) {
+      logError('getSchoolAnnouncements', err, { companyId });
+      return INITIAL_SCHOOL_ANNOUNCEMENTS.filter((a) => a.companyId === companyId);
+    }
+  },
+
+  createSchoolAnnouncement: async (
+    companyId: string,
+    data: Partial<SchoolAnnouncement>
+  ): Promise<SchoolAnnouncement> => {
+    const nowIso = new Date().toISOString();
+    const id = data.id || `not_${companyId.replace('comp_', '')}_${Date.now()}`;
+    const newNotice: SchoolAnnouncement = {
+      id,
+      companyId,
+      title: data.title || 'Untitled Notice',
+      content: data.content || '',
+      targetAudience: data.targetAudience || 'all',
+      category: data.category || 'general',
+      priority: data.priority || 'normal',
+      isPinned: Boolean(data.isPinned),
+      publishDate: data.publishDate || nowIso.substring(0, 10),
+      authorName: data.authorName || 'School Administration',
+      status: data.status || 'published',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      await withTimeout(setDoc(doc(firestoreDb, 'schoolAnnouncements', id), newNotice), 8000);
+      return newNotice;
+    } catch (err) {
+      logError('createSchoolAnnouncement', err, { companyId, id });
+      throw new ApiError(500, 'Failed to publish announcement');
+    }
+  },
+
+  updateSchoolAnnouncement: async (
+    id: string,
+    data: Partial<SchoolAnnouncement>
+  ): Promise<SchoolAnnouncement> => {
+    const nowIso = new Date().toISOString();
+    const updatePayload = { ...data, updatedAt: nowIso };
+    try {
+      await withTimeout(updateDoc(doc(firestoreDb, 'schoolAnnouncements', id), updatePayload), 8000);
+      const snap = await getDoc(doc(firestoreDb, 'schoolAnnouncements', id));
+      return { id: snap.id, ...snap.data() } as SchoolAnnouncement;
+    } catch (err) {
+      logError('updateSchoolAnnouncement', err, { id });
+      throw new ApiError(500, 'Failed to update announcement');
+    }
+  },
+
+  deleteSchoolAnnouncement: async (id: string): Promise<void> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'schoolAnnouncements', id)), 8000);
+    } catch (err) {
+      logError('deleteSchoolAnnouncement', err, { id });
+      throw new ApiError(500, 'Failed to delete announcement');
+    }
+  },
+
+  // --- 10. School Dashboard Stats & Search ---
   getSchoolDashboardStats: async (companyId: string): Promise<SchoolDashboardStats> => {
     try {
-      const [years, grades, sections, subjects, students, announcements] = await Promise.all([
+      const [years, grades, sections, subjects, students, announcements, teachers] = await Promise.all([
         api.getAcademicYears(companyId),
         api.getGrades(companyId),
         api.getSections(companyId),
         api.getSubjects(companyId),
         api.getStudents(companyId),
-        api.getAnnouncements(companyId),
+        api.getSchoolAnnouncements(companyId),
+        api.getTeachers(companyId),
       ]);
 
       const activeYear = years.find((y) => y.isActive) || years[0] || null;
@@ -2971,6 +3211,8 @@ export const api = {
         sectionsCount: sections.length,
         subjectsCount: subjects.length,
         studentsCount: students.length,
+        teachersCount: teachers.length,
+        attendanceTodayCount: 0,
         activeAcademicYear: activeYear,
         recentAnnouncementsCount: announcements.length,
         savedMarklistsCount: savedMarklists.length,
@@ -2983,6 +3225,8 @@ export const api = {
         sectionsCount: 8,
         subjectsCount: 10,
         studentsCount: 14,
+        teachersCount: 5,
+        attendanceTodayCount: 0,
         activeAcademicYear: INITIAL_ACADEMIC_YEARS[0],
         recentAnnouncementsCount: 3,
         savedMarklistsCount: 2,
@@ -2995,12 +3239,13 @@ export const api = {
     if (!term || !term.trim()) return [];
     const cleanTerm = term.toLowerCase().trim();
 
-    const [students, grades, sections, subjects, announcements] = await Promise.all([
+    const [students, grades, sections, subjects, announcements, teachers] = await Promise.all([
       api.getStudents(companyId),
       api.getGrades(companyId),
       api.getSections(companyId),
       api.getSubjects(companyId),
-      api.getAnnouncements(companyId),
+      api.getSchoolAnnouncements(companyId),
+      api.getTeachers(companyId),
     ]);
 
     const results: SchoolSearchResult[] = [];
@@ -3022,6 +3267,26 @@ export const api = {
           badge: 'Student',
           details: { ...stu, gradeName, sectionName },
           linkTab: 'students',
+        });
+      }
+    });
+
+    // Search Teachers
+    teachers.forEach((tch) => {
+      if (
+        tch.fullName.toLowerCase().includes(cleanTerm) ||
+        tch.employeeId.toLowerCase().includes(cleanTerm) ||
+        (tch.department && tch.department.toLowerCase().includes(cleanTerm)) ||
+        (tch.qualification && tch.qualification.toLowerCase().includes(cleanTerm))
+      ) {
+        results.push({
+          type: 'teacher',
+          id: tch.id,
+          title: tch.fullName,
+          subtitle: `${tch.employeeId} • ${tch.department || 'Academic Staff'}${tch.qualification ? ` • ${tch.qualification}` : ''}`,
+          badge: 'Teacher',
+          details: tch,
+          linkTab: 'teachers',
         });
       }
     });
@@ -3075,13 +3340,13 @@ export const api = {
 
     // Search Announcements
     announcements.forEach((ann) => {
-      const content = ann.content || ann.description || '';
+      const content = ann.content || '';
       if (ann.title.toLowerCase().includes(cleanTerm) || content.toLowerCase().includes(cleanTerm)) {
         results.push({
           type: 'announcement',
           id: ann.id,
           title: ann.title,
-          subtitle: ann.publishDate ? `Published: ${ann.publishDate.substring(0, 10)}` : 'School Announcement',
+          subtitle: ann.publishDate ? `Published: ${ann.publishDate.substring(0, 10)} • Audience: ${ann.targetAudience}` : 'School Notice',
           badge: 'Announcement',
           linkTab: 'announcements',
         });

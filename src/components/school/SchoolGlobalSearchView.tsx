@@ -23,7 +23,7 @@ import { Button } from '../ui/Button';
 interface SchoolGlobalSearchViewProps {
   company: Company;
   initialQuery?: string;
-  onNavigateTab: (tab: 'dashboard' | 'marklist' | 'academic-years' | 'grades' | 'subjects' | 'students' | 'search') => void;
+  onNavigateTab: (tab: 'dashboard' | 'marklist' | 'academic-years' | 'grades' | 'subjects' | 'students' | 'teachers' | 'attendance' | 'announcements' | 'search') => void;
   onSelectStudentDetails?: (student: any) => void;
 }
 
@@ -70,6 +70,8 @@ export const SchoolGlobalSearchView: React.FC<SchoolGlobalSearchViewProps> = ({
     switch (type) {
       case 'student':
         return <Users className="w-5 h-5 text-emerald-500" />;
+      case 'teacher':
+        return <GraduationCap className="w-5 h-5 text-amber-500" />;
       case 'grade':
         return <Layers className="w-5 h-5 text-indigo-500" />;
       case 'section':
@@ -86,6 +88,7 @@ export const SchoolGlobalSearchView: React.FC<SchoolGlobalSearchViewProps> = ({
   const counts = {
     all: results.length,
     student: results.filter((r) => r.type === 'student').length,
+    teacher: results.filter((r) => r.type === 'teacher').length,
     grade: results.filter((r) => r.type === 'grade').length,
     section: results.filter((r) => r.type === 'section').length,
     subject: results.filter((r) => r.type === 'subject').length,
@@ -149,6 +152,18 @@ export const SchoolGlobalSearchView: React.FC<SchoolGlobalSearchViewProps> = ({
                 }`}
               >
                 Students ({counts.student})
+              </button>
+            )}
+            {counts.teacher > 0 && (
+              <button
+                onClick={() => setActiveCategory('teacher')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap ${
+                  activeCategory === 'teacher'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                }`}
+              >
+                Teachers ({counts.teacher})
               </button>
             )}
             {counts.subject > 0 && (

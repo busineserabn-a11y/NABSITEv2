@@ -1015,11 +1015,77 @@ export interface Marklist {
   updatedAt: string;
 }
 
+export interface Teacher {
+  id: string;
+  companyId: string;
+  fullName: string;
+  employeeId: string; // e.g. "T-GG-010"
+  email?: string;
+  phone?: string;
+  gender?: 'male' | 'female' | 'other';
+  subjectIds?: string[]; // IDs of subjects taught
+  gradeIds?: string[]; // IDs of grades assigned
+  sectionIds?: string[]; // IDs of sections assigned
+  qualification?: string; // e.g. "B.Sc Mathematics, B.Ed"
+  department?: string; // e.g. "Natural Science", "Languages", "Arabic Curriculum", "Social Sciences"
+  status: 'active' | 'on_leave' | 'inactive';
+  joinedDate?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
+
+export interface StudentAttendanceEntry {
+  studentId: string;
+  studentName: string;
+  admissionNo: string;
+  status: AttendanceStatus;
+  remark?: string;
+}
+
+export interface AttendanceSession {
+  id: string; // e.g. "att_comp_gara_guri_gr_gg_9_sec_gg_9a_2024-03-01"
+  companyId: string;
+  academicYearId?: string;
+  gradeId: string;
+  sectionId: string;
+  date: string; // YYYY-MM-DD
+  takenBy?: string; // teacher or sub-admin name / ID
+  records: StudentAttendanceEntry[];
+  totalStudents: number;
+  presentCount: number;
+  absentCount: number;
+  lateCount: number;
+  excusedCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SchoolAnnouncement {
+  id: string;
+  companyId: string;
+  title: string;
+  content: string;
+  targetAudience: 'all' | 'students' | 'teachers' | 'parents';
+  category: 'academic' | 'exam' | 'holiday' | 'event' | 'general';
+  priority: 'normal' | 'important' | 'urgent';
+  isPinned: boolean;
+  publishDate: string;
+  authorName?: string;
+  status: 'published' | 'draft' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SchoolDashboardStats {
   gradesCount: number;
   sectionsCount: number;
   subjectsCount: number;
   studentsCount: number;
+  teachersCount?: number;
+  attendanceTodayCount?: number;
   activeAcademicYear: AcademicYear | null;
   recentAnnouncementsCount: number;
   savedMarklistsCount: number;
@@ -1036,7 +1102,7 @@ export interface SchoolDashboardStats {
 }
 
 export interface SchoolSearchResult {
-  type: 'student' | 'grade' | 'section' | 'subject' | 'announcement';
+  type: 'student' | 'teacher' | 'grade' | 'section' | 'subject' | 'announcement';
   id: string;
   title: string;
   subtitle: string;
@@ -1044,5 +1110,6 @@ export interface SchoolSearchResult {
   details?: Record<string, any>;
   linkTab?: string;
 }
+
 
 

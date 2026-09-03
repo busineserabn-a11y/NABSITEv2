@@ -180,5 +180,20 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isSignedIn();
     }
+
+    match /teachers/{teacherId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /schoolAnnouncements/{announcementId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
   }
 }
