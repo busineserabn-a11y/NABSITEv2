@@ -106,6 +106,16 @@ export interface CompanyCreationRow {
   // Administrative / Governance
   assignedAdminId?: string;
 
+  // Approval & Provisioning Workflow (V2.0 Marklist One-by-One Approval)
+  approvalStatus?: 'pending' | 'approved' | 'skipped' | 'failed';
+  createdCompanyId?: string;
+  createdWebsiteId?: string;
+  createdSlug?: string;
+  creationError?: string;
+
+  // Selected Website Template / Theme
+  selectedThemeId?: string;
+
   // Validation State
   isValid?: boolean;
   errors?: Record<string, string>;
