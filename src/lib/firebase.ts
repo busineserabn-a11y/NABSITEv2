@@ -51,15 +51,17 @@ export const app: FirebaseApp = appInstance;
 export const auth: Auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-const databaseId = metaEnv.VITE_FIRESTORE_DATABASE_ID || "default";
+const configuredDbId = metaEnv.VITE_FIRESTORE_DATABASE_ID;
+// In Firebase SDK, passing literal "default" causes NOT_FOUND (GCP default database is "(default)" or omitted)
+const resolvedDbId = (!configuredDbId || configuredDbId === 'default' || configuredDbId === '(default)') ? undefined : configuredDbId;
 
 let firestoreInstance: Firestore;
 try {
-  firestoreInstance = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
-  }, databaseId);
+  firestoreInstance = resolvedDbId
+    ? initializeFirestore(app, { experimentalForceLongPolling: true }, resolvedDbId)
+    : initializeFirestore(app, { experimentalForceLongPolling: true });
 } catch {
-  firestoreInstance = getFirestore(app, databaseId);
+  firestoreInstance = resolvedDbId ? getFirestore(app, resolvedDbId) : getFirestore(app);
 }
 
 export const db: Firestore = firestoreInstance;

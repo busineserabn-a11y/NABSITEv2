@@ -81,8 +81,8 @@ export const SchoolStudentPortalView: React.FC<SchoolStudentPortalViewProps> = (
     setErrorMessage(null);
 
     try {
-      // 1. Dual verification lookup
-      const authResult = await api.verifyStudentForPortal(company.id, fullName, fanNumber);
+      // 1. Dual verification lookup across company ID and slug
+      const authResult = await api.verifyStudentForPortal(company.id, fullName, fanNumber, company.slug);
 
       if (!authResult) {
         setErrorMessage(
@@ -94,7 +94,8 @@ export const SchoolStudentPortalView: React.FC<SchoolStudentPortalViewProps> = (
       }
 
       // 2. Fetch full academic report for this specific student only
-      const report = await api.getStudentAcademicReport(company.id, authResult.student.id);
+      const targetCompanyId = authResult.student.companyId || company.id;
+      const report = await api.getStudentAcademicReport(targetCompanyId, authResult.student.id);
 
       setVerifiedData({
         student: authResult.student,
@@ -201,6 +202,10 @@ export const SchoolStudentPortalView: React.FC<SchoolStudentPortalViewProps> = (
                       placeholder="e.g. Abebe Bikila"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
+                      autoCapitalize="words"
+                      autoCorrect="off"
+                      autoComplete="off"
+                      spellCheck={false}
                       className="w-full h-11 pl-10 pr-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                     />
                   </div>
@@ -222,6 +227,10 @@ export const SchoolStudentPortalView: React.FC<SchoolStudentPortalViewProps> = (
                       placeholder="e.g. FAN-2024-001 or ADM/2024/001"
                       value={fanNumber}
                       onChange={(e) => setFanNumber(e.target.value)}
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      autoComplete="off"
+                      spellCheck={false}
                       className="w-full h-11 pl-10 pr-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-mono font-medium text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 uppercase"
                     />
                   </div>
