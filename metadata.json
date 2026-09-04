@@ -1,6 +1,6 @@
 {
   "name": "NABSITE",
-  "description": "Managed digital identity and website creation platform with Website Studio 2.1, WordPress-grade visual page & navigation editing, Owner-controlled permissions matrix, and Mastermind management.",
+  "description": "Managed digital identity and website creation platform with Website Studio 2.1, Multi-Company Creation V2.0 spreadsheet engine, WordPress-grade visual page editing, Owner-controlled permissions matrix, and Mastermind management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

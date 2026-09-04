@@ -443,8 +443,17 @@ export const api = {
     const slug = companyData.slug || generateSlug(companyData.name || 'New Company');
     const nowIso = new Date().toISOString();
 
+    // Clean incoming payload to remove undefined fields that Firestore rejects
+    const cleanIncoming: Record<string, any> = {};
+    Object.entries(companyData || {}).forEach(([k, v]) => {
+      if (v !== undefined) cleanIncoming[k] = v;
+    });
+
+    const isSchoolCat = (companyData.category || '').toLowerCase() === 'school' || (companyData.category || '').toLowerCase() === 'education';
+
     const newCompany: Company = {
       id: compId,
+      ...cleanIncoming,
       name: companyData.name || 'Untitled Enterprise',
       shortName: companyData.shortName || companyData.name?.substring(0, 20) || 'Enterprise',
       slug,
@@ -465,14 +474,45 @@ export const api = {
       websiteId: webId,
       assignedAdminId: companyData.assignedAdminId || '',
       assignedAdminIds: companyData.assignedAdminIds || [],
-      plan: 'business_pro',
-      metrics: { views: 0, qrScans: 0, leadsCount: 0, reviewsCount: 0, averageRating: 5.0 },
+      plan: companyData.plan || 'business_pro',
+      metrics: companyData.metrics || { views: 0, qrScans: 0, leadsCount: 0, reviewsCount: 0, averageRating: 5.0 },
+      schoolFeatures: companyData.schoolFeatures || (isSchoolCat ? {
+        academicYears: true,
+        grades: true,
+        sections: true,
+        globalSearch: true,
+        studentRoster: true,
+        marklist: true,
+        attendance: true,
+        discipline: true,
+        schoolFaq: true,
+        announcements: true,
+      } : undefined),
+      metadata: companyData.metadata || {},
       createdAt: nowIso,
       updatedAt: nowIso,
     };
 
     const categoryProfile = getCategoryDesignProfile(newCompany.category);
     const categoryWebsiteConfig = generateWebsiteConfigForCategory(newCompany, newCompany.category);
+
+    // Apply custom website hero and about metadata if provided
+    const customMeta = (newCompany.metadata || {}) as Record<string, any>;
+    const webConfigAny = categoryWebsiteConfig as any;
+    if (customMeta.websiteHeroTitle && webConfigAny.sections) {
+      const heroSec = webConfigAny.sections.find((s: any) => s.type === 'hero');
+      if (heroSec && heroSec.content) {
+        heroSec.content.headline = customMeta.websiteHeroTitle;
+        if (customMeta.websiteHeroDescription) heroSec.content.subheadline = customMeta.websiteHeroDescription;
+        if (customMeta.websiteCtaText) heroSec.content.primaryCtaText = customMeta.websiteCtaText;
+      }
+    }
+    if (customMeta.websiteAboutText && webConfigAny.sections) {
+      const aboutSec = webConfigAny.sections.find((s: any) => s.type === 'about');
+      if (aboutSec && aboutSec.content) {
+        aboutSec.content.description = customMeta.websiteAboutText;
+      }
+    }
 
     const newWebsite: Website = {
       id: webId,
@@ -513,8 +553,12 @@ export const api = {
     try {
       // 1. Write Company Document
       try {
+        const cleanPayload: Record<string, any> = {};
+        Object.entries(newCompany).forEach(([k, v]) => {
+          if (v !== undefined) cleanPayload[k] = v;
+        });
         await withTimeout(
-          setDoc(doc(firestoreDb, 'companies', compId), newCompany),
+          setDoc(doc(firestoreDb, 'companies', compId), cleanPayload),
           8000,
           'Writing company document to Firestore timed out'
         );

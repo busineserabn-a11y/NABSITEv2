@@ -23,6 +23,7 @@ import { WebsitesListPage } from './pages/websites/WebsitesListPage';
 // Owner God Mode pages
 import { OwnerOverviewPage } from './pages/owner/OwnerOverviewPage';
 import { OwnerCompaniesPage } from './pages/owner/OwnerCompaniesPage';
+import { MultiCompanyCreationPage } from './pages/owner/MultiCompanyCreationPage';
 import { BulkCompanyImportPage } from './pages/owner/BulkCompanyImportPage';
 import { OwnerCompanyDetailPage } from './pages/owner/OwnerCompanyDetailPage';
 import { OwnerQrPage } from './pages/owner/OwnerQrPage';
@@ -281,6 +282,26 @@ export default function App() {
             }
           />
           <Route
+            path="/mastermind/companies/create"
+            element={
+              <ProtectedRoute allowedRoles={['OWNER']}>
+                <DashboardLayout>
+                  <MultiCompanyCreationPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mastermind/companies/new"
+            element={
+              <ProtectedRoute allowedRoles={['OWNER']}>
+                <DashboardLayout>
+                  <MultiCompanyCreationPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/mastermind/companies/import"
             element={
               <ProtectedRoute allowedRoles={['OWNER']}>
@@ -528,6 +549,26 @@ export default function App() {
               <ProtectedRoute allowedRoles={['OWNER']}>
                 <DashboardLayout>
                   <OwnerCompaniesPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/owner/companies/create"
+            element={
+              <ProtectedRoute allowedRoles={['OWNER']}>
+                <DashboardLayout>
+                  <MultiCompanyCreationPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/owner/companies/new"
+            element={
+              <ProtectedRoute allowedRoles={['OWNER']}>
+                <DashboardLayout>
+                  <MultiCompanyCreationPage />
                 </DashboardLayout>
               </ProtectedRoute>
             }

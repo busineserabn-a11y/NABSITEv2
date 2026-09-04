@@ -28,6 +28,7 @@ import {
   Shield,
   Layout,
   FileSpreadsheet,
+  Table as TableIcon,
   Upload,
   Utensils,
   Share2,
@@ -330,6 +331,17 @@ export const OwnerCompaniesPage: React.FC = () => {
             </Button>
           </Link>
 
+          <Link to="/owner/companies/create">
+            <Button
+              size="sm"
+              variant="outline"
+              icon={TableIcon}
+              className="border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 font-bold"
+            >
+              Multi-Company Entry V2.0
+            </Button>
+          </Link>
+
           {/* Primary Action: Add Company ▾ Dropdown */}
           <div className="relative" ref={addDropdownRef}>
             <button
@@ -342,7 +354,28 @@ export const OwnerCompaniesPage: React.FC = () => {
             </button>
 
             {addDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 space-y-1">
+              <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 space-y-1">
+                <Link
+                  to="/owner/companies/create"
+                  onClick={() => setAddDropdownOpen(false)}
+                  className="w-full text-left px-3.5 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-slate-900 dark:text-white hover:text-amber-600 dark:hover:text-amber-400 transition-colors flex items-center gap-3 group block border border-amber-500/20"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 font-black text-xs">
+                    V2
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      <span>Multi-Company Entry V2.0</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black">
+                        NEW
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                      High-speed spreadsheet data entry & paste
+                    </div>
+                  </div>
+                </Link>
+
                 <button
                   onClick={() => {
                     setAddDropdownOpen(false);
@@ -351,12 +384,12 @@ export const OwnerCompaniesPage: React.FC = () => {
                   }}
                   className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-amber-500/10 text-slate-900 dark:text-white hover:text-amber-600 dark:hover:text-amber-400 transition-colors flex items-center gap-3 group"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
                     <Building2 className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold">Create One Company</div>
-                    <div className="text-[10px] text-slate-400">Interactive multi-field creation form</div>
+                    <div className="text-xs font-bold">Single Company Modal</div>
+                    <div className="text-[10px] text-slate-400">Interactive form for one business</div>
                   </div>
                 </button>
 
