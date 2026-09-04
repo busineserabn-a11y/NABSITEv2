@@ -51,6 +51,7 @@ import {
   DisciplineRecord,
   DisciplineFollowUpStatus,
   SchoolFaq,
+  DEFAULT_SCHOOL_FEATURES,
 } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_SETTINGS, INITIAL_COMPANIES, INITIAL_WEBSITES, INITIAL_ANNOUNCEMENTS } from '../data/seed';
 import {
@@ -1054,6 +1055,12 @@ export const api = {
       }
 
       // 5. Create independent Company Document in Firestore
+      const isSchoolCompany =
+        sourceCompany.category === 'School' ||
+        sourceCompany.subcategory === 'School' ||
+        sourceCompany.id.includes('school') ||
+        !!options.schoolFeatures;
+
       const newCompany: Company = {
         ...JSON.parse(JSON.stringify(sourceCompany)),
         id: newCompanyId,
@@ -1062,6 +1069,11 @@ export const api = {
         websiteId: newWebsiteId,
         websiteStatus: 'draft',
         status: 'active',
+        schoolFeatures: options.schoolFeatures
+          ? options.schoolFeatures
+          : isSchoolCompany
+          ? (sourceCompany.schoolFeatures || DEFAULT_SCHOOL_FEATURES)
+          : undefined,
         createdAt: nowIso,
         updatedAt: nowIso,
       };
@@ -1181,6 +1193,27 @@ export const api = {
     } catch (err: any) {
       logError('duplicateCompanyAndWebsite', err, { sourceCompanyId, newCompanyName });
       throw new ApiError(500, `Website duplication failed: ${err.message || String(err)}`);
+    }
+  },
+
+  updateSchoolFeatures: async (companyId: string, schoolFeatures: Record<string, boolean>): Promise<Company> => {
+    try {
+      const compRef = doc(firestoreDb, 'companies', companyId);
+      const updateData = {
+        schoolFeatures,
+        updatedAt: new Date().toISOString(),
+      };
+      await withTimeout(setDoc(compRef, updateData, { merge: true }), 10000);
+      const snap = await withTimeout(getDoc(compRef), 6000);
+      if (!snap.exists()) {
+        throw new ApiError(404, `Company ${companyId} not found`);
+      }
+      const updated = { id: snap.id, ...snap.data() } as Company;
+      await logAudit('UPDATE', 'COMPANY_FEATURES', companyId, `Updated school features for ${updated.name}`);
+      return updated;
+    } catch (err: any) {
+      logError('updateSchoolFeatures', err, { companyId });
+      throw new ApiError(500, `Failed to update school features: ${err.message || String(err)}`);
     }
   },
 

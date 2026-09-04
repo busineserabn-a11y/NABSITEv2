@@ -26,6 +26,7 @@ interface SchoolGradesSectionsViewProps {
   students: Student[];
   onRefresh: () => void;
   onOpenMarklistForSection?: (gradeId: string, sectionId: string) => void;
+  defaultFocus?: 'grades' | 'sections';
 }
 
 export const SchoolGradesSectionsView: React.FC<SchoolGradesSectionsViewProps> = ({
@@ -35,6 +36,7 @@ export const SchoolGradesSectionsView: React.FC<SchoolGradesSectionsViewProps> =
   students,
   onRefresh,
   onOpenMarklistForSection,
+  defaultFocus,
 }) => {
   const [selectedGradeId, setSelectedGradeId] = useState<string>(grades[0]?.id || '');
 

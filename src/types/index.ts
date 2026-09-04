@@ -126,6 +126,7 @@ export interface Company {
   plan?: string;
   metrics?: Record<string, any>;
   metadata?: Record<string, any>;
+  schoolFeatures?: Record<string, boolean>;
   createdAt: string;
   updatedAt: string;
   publishedAt?: string;
@@ -598,9 +599,11 @@ export interface DuplicateWebsiteOptions {
   sourceCompanyId: string;
   newCompanyName: string;
   newCompanySlug: string;
-  copyMenuContent: boolean;
+  copyMenuContent?: boolean;
   copyAnnouncements?: boolean;
   copyOffers?: boolean;
+  copySchoolFaq?: boolean;
+  schoolFeatures?: Record<SchoolFeatureKey, boolean>;
 }
 
 export interface DuplicationResult {
@@ -608,6 +611,8 @@ export interface DuplicationResult {
   website: Website;
   duplicatedProductsCount?: number;
   duplicatedCategoriesCount?: number;
+  duplicatedAnnouncementsCount?: number;
+  duplicatedOffersCount?: number;
 }
 
 export interface Lead {
@@ -899,8 +904,103 @@ export interface CategoryDesignProfile {
 }
 
 // ===========================================================================
-// School Academic Module Types (V1 Core Features)
+// School Academic Module Types (10 Core School Features)
 // ===========================================================================
+
+export type SchoolFeatureKey =
+  | 'academic_years'
+  | 'grades'
+  | 'sections'
+  | 'global_search'
+  | 'student_roster'
+  | 'marklist'
+  | 'class_attendance'
+  | 'discipline_behavior'
+  | 'school_faq'
+  | 'announcements';
+
+export interface SchoolFeatureDefinition {
+  key: SchoolFeatureKey;
+  label: string;
+  description: string;
+  tabKey: string;
+}
+
+export const SCHOOL_FEATURE_DEFINITIONS: SchoolFeatureDefinition[] = [
+  {
+    key: 'academic_years',
+    label: 'Academic Years',
+    description: 'Configure and manage academic years, calendar formats, and active periods.',
+    tabKey: 'academic-years',
+  },
+  {
+    key: 'grades',
+    label: 'Grades',
+    description: 'Configure school grade levels (e.g. Grade 9, Grade 10, Grade 11, Grade 12).',
+    tabKey: 'grades',
+  },
+  {
+    key: 'sections',
+    label: 'Sections',
+    description: 'Define class sections, classrooms, and student capacities per grade.',
+    tabKey: 'sections',
+  },
+  {
+    key: 'global_search',
+    label: 'Global Search',
+    description: 'Tenant-isolated multi-entity search across students, grades, marks, and records.',
+    tabKey: 'search',
+  },
+  {
+    key: 'student_roster',
+    label: 'Student Roster / Registration',
+    description: 'Spreadsheet-style bulk student entry with Excel/Google Sheets copy-paste support.',
+    tabKey: 'students',
+  },
+  {
+    key: 'marklist',
+    label: 'Marklist',
+    description: 'Spreadsheet-style grading marklists with component scoring and copy-paste.',
+    tabKey: 'marklist',
+  },
+  {
+    key: 'class_attendance',
+    label: 'Class Attendance',
+    description: 'Daily attendance tracking (Present, Absent, Late, Excused) with historical logs.',
+    tabKey: 'attendance',
+  },
+  {
+    key: 'discipline_behavior',
+    label: 'Discipline / Behavior',
+    description: 'Private behavioral incident logging, follow-up tracking, and student linkages.',
+    tabKey: 'discipline',
+  },
+  {
+    key: 'school_faq',
+    label: 'School FAQ',
+    description: 'School-specific frequently asked questions and academic guidance answers.',
+    tabKey: 'faq',
+  },
+  {
+    key: 'announcements',
+    label: 'Announcements',
+    description: 'Official bulletins, circulars, and notices with optional attachments.',
+    tabKey: 'announcements',
+  },
+];
+
+export const DEFAULT_SCHOOL_FEATURES: Record<SchoolFeatureKey, boolean> = {
+  academic_years: true,
+  grades: true,
+  sections: true,
+  global_search: true,
+  student_roster: true,
+  marklist: true,
+  class_attendance: true,
+  discipline_behavior: true,
+  school_faq: true,
+  announcements: true,
+};
 
 export interface AcademicYear {
   id: string;

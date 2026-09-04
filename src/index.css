@@ -79,6 +79,20 @@
     background-color: #0f172a;
     color: #f8fafc;
   }
+
+  .bg-white select option,
+  .bg-slate-50 select option,
+  select:not(.dark select) option {
+    background-color: #ffffff;
+    color: #0f172a;
+  }
+
+  .dark select option,
+  .bg-slate-900 select option,
+  .bg-slate-950 select option {
+    background-color: #0f172a;
+    color: #f8fafc;
+  }
 }
 
 /* Custom NABSITE Glow and Glass Utilities */

@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions for authentication & roles
+    // Helper functions for authentication & dynamic roles (NO hardcoded emails or school IDs)
     function isSignedIn() {
       return request.auth != null;
     }
@@ -13,40 +13,34 @@ service cloud.firestore {
         : null;
     }
 
-    function isOwnerEmail() {
-      return isSignedIn() && (
-        request.auth.token.email == 'abenezarofficial1@gmail.com' ||
-        request.auth.token.email == 'busineser.abn@gmail.com' ||
-        request.auth.token.email == 'owner@nabsite.io'
+    function isOwner() {
+      return isSignedIn() && getUserData() != null && (
+        getUserData().role == 'OWNER' ||
+        getUserData().role == 'ADMIN'
       );
     }
 
-    function isOwner() {
-      return isOwnerEmail() || (getUserData() != null && getUserData().role == 'OWNER');
-    }
-
-    function isAdmin() {
-      return isOwner() || (getUserData() != null && (getUserData().role == 'ADMIN' || getUserData().role == 'OWNER'));
-    }
-
-    function isSubAdmin(companyId) {
-      return isAdmin() || (
-        getUserData() != null &&
-        getUserData().role == 'SUB_ADMIN' &&
+    // Dynamic Manager authorization based on assigned company relationship
+    function isManagerForCompany(companyId) {
+      return isSignedIn() && (
+        isOwner() ||
         (
-          getUserData().assignedCompanyId == companyId ||
-          (getUserData().assignedCompanyIds != null && companyId in getUserData().assignedCompanyIds)
+          getUserData() != null &&
+          getUserData().role == 'SUB_ADMIN' &&
+          (
+            getUserData().assignedCompanyId == companyId ||
+            (getUserData().assignedCompanyIds != null && companyId in getUserData().assignedCompanyIds)
+          )
         )
       );
     }
 
-    // Users Collection - ONLY Owner can update permissionMatrix, role, or company assignments
+    // Users Collection - ONLY Owner can update role or company assignments
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isOwner() || isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow create: if isOwner() || (isSignedIn() && request.auth.uid == userId);
       allow update: if isOwner() || (
         isSignedIn() && request.auth.uid == userId &&
-        // Self updates cannot elevate role or change permissions
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissionMatrix', 'assignedCompanyIds', 'assignedCompanyId'])
       );
       allow delete: if isOwner();
@@ -55,25 +49,31 @@ service cloud.firestore {
     // Companies Collection
     match /companies/{companyId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isOwner();
+      allow update: if isManagerForCompany(companyId);
+      allow delete: if isOwner();
     }
 
     // Websites Collection
     match /websites/{websiteId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isOwner();
+      allow update: if isManagerForCompany(request.resource.data.companyId);
+      allow delete: if isOwner();
     }
 
     // Products & Menu Items
     match /products/{productId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isManagerForCompany(resource.data.companyId);
     }
 
     // Product Categories
     match /productCategories/{catId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isManagerForCompany(resource.data.companyId);
     }
 
     // QR Configurations
@@ -84,21 +84,22 @@ service cloud.firestore {
 
     // Reviews Collection
     match /reviews/{reviewId} {
-      allow read: if true;
-      allow create: if true;
-      allow write: if isSignedIn();
+      allow read, create: if true;
+      allow update, delete: if isSignedIn();
     }
 
     // Offers & Specials
     match /offers/{offerId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isManagerForCompany(resource.data.companyId);
     }
 
     // Announcements
     match /announcements/{announcementId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isManagerForCompany(resource.data.companyId);
     }
 
     // Public Leads / Inquiries
@@ -124,102 +125,101 @@ service cloud.firestore {
     // Platform Settings & Showcase
     match /settings/{settingDoc} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isOwner();
     }
 
     // Categories
     match /categories/{catId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isOwner();
     }
 
     // Showcase
     match /showcase/{itemId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isOwner();
     }
 
     // Themes & Features
     match /themes/{themeId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isOwner();
     }
 
     match /features/{featureId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isOwner();
     }
 
-    // School Academic Module: Academic Years, Grades, Sections, Subjects, Students, Marklists
+    // School Academic Module: Academic Years, Grades, Sections, Subjects (Public Read, Manager Write)
     match /academicYears/{yearId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isManagerForCompany(resource.data.companyId);
     }
 
     match /grades/{gradeId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isManagerForCompany(resource.data.companyId);
     }
 
     match /sections/{sectionId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isManagerForCompany(resource.data.companyId);
     }
 
     match /subjects/{subjectId} {
       allow read: if true;
-      allow write: if isSignedIn();
-    }
-
-    match /students/{studentId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-
-    match /marklists/{marklistId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isManagerForCompany(resource.data.companyId);
     }
 
     match /teachers/{teacherId} {
       allow read: if true;
-      allow write: if isSignedIn();
-    }
-
-    match /attendance/{attendanceId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isManagerForCompany(resource.data.companyId);
     }
 
     match /schoolAnnouncements/{announcementId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isManagerForCompany(resource.data.companyId);
     }
 
-    // Discipline / Behavior Records (Tenant Isolated - Owner & Authorized Sub-Admin)
-    match /disciplineRecords/{recordId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && (
-        isOwner() ||
-        isSubAdmin(request.resource.data.companyId)
-      );
-      allow update, delete: if isSignedIn() && (
-        isOwner() ||
-        isSubAdmin(resource.data.companyId)
-      );
-    }
-
-    // School FAQ (Tenant Isolated Write, Public Read for Published items)
     match /schoolFaqs/{faqId} {
       allow read: if true;
-      allow create: if isSignedIn() && (
-        isOwner() ||
-        isSubAdmin(request.resource.data.companyId)
-      );
-      allow update, delete: if isSignedIn() && (
-        isOwner() ||
-        isSubAdmin(resource.data.companyId)
-      );
+      allow create: if isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isManagerForCompany(resource.data.companyId);
+    }
+
+    // =========================================================================
+    // PRIVATE ACADEMIC DATA: STUDENTS, MARKLISTS, ATTENDANCE, DISCIPLINE
+    // Strictly NO public read access. Only authorized Managers (Owner or assigned Sub-Admin)
+    // =========================================================================
+    match /students/{studentId} {
+      allow read: if isSignedIn() && isManagerForCompany(resource.data.companyId);
+      allow create: if isSignedIn() && isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isSignedIn() && isManagerForCompany(resource.data.companyId);
+    }
+
+    match /marklists/{marklistId} {
+      allow read: if isSignedIn() && isManagerForCompany(resource.data.companyId);
+      allow create: if isSignedIn() && isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isSignedIn() && isManagerForCompany(resource.data.companyId);
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if isSignedIn() && isManagerForCompany(resource.data.companyId);
+      allow create: if isSignedIn() && isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isSignedIn() && isManagerForCompany(resource.data.companyId);
+    }
+
+    match /disciplineRecords/{recordId} {
+      allow read: if isSignedIn() && isManagerForCompany(resource.data.companyId);
+      allow create: if isSignedIn() && isManagerForCompany(request.resource.data.companyId);
+      allow update, delete: if isSignedIn() && isManagerForCompany(resource.data.companyId);
     }
   }
 }
