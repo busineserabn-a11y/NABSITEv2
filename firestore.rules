@@ -195,30 +195,29 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // ACADEMIC DATA: STUDENTS, MARKLISTS, ATTENDANCE, DISCIPLINE
-    // Public read for student portal record verification and report cards;
-    // Write operations strictly restricted to authorized Managers (Owner or assigned Sub-Admin).
+    // PRIVATE ACADEMIC DATA: STUDENTS, MARKLISTS, ATTENDANCE, DISCIPLINE
+    // Strictly NO public read access. Only authorized Managers (Owner or assigned Sub-Admin)
     // =========================================================================
     match /students/{studentId} {
-      allow read: if true;
+      allow read: if isSignedIn() && isManagerForCompany(resource.data.companyId);
       allow create: if isSignedIn() && isManagerForCompany(request.resource.data.companyId);
       allow update, delete: if isSignedIn() && isManagerForCompany(resource.data.companyId);
     }
 
     match /marklists/{marklistId} {
-      allow read: if true;
+      allow read: if isSignedIn() && isManagerForCompany(resource.data.companyId);
       allow create: if isSignedIn() && isManagerForCompany(request.resource.data.companyId);
       allow update, delete: if isSignedIn() && isManagerForCompany(resource.data.companyId);
     }
 
     match /attendance/{attendanceId} {
-      allow read: if true;
+      allow read: if isSignedIn() && isManagerForCompany(resource.data.companyId);
       allow create: if isSignedIn() && isManagerForCompany(request.resource.data.companyId);
       allow update, delete: if isSignedIn() && isManagerForCompany(resource.data.companyId);
     }
 
     match /disciplineRecords/{recordId} {
-      allow read: if true;
+      allow read: if isSignedIn() && isManagerForCompany(resource.data.companyId);
       allow create: if isSignedIn() && isManagerForCompany(request.resource.data.companyId);
       allow update, delete: if isSignedIn() && isManagerForCompany(resource.data.companyId);
     }

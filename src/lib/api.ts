@@ -2538,21 +2538,6 @@ export const api = {
     companyId: string,
     filters?: { gradeId?: string; sectionId?: string; academicYearId?: string; search?: string }
   ): Promise<Student[]> => {
-    let resultList: Student[] = [];
-
-    // 1. Check local storage cache so newly added students in browser are instantly available
-    let localStudents: Student[] = [];
-    try {
-      const stored = localStorage.getItem('nabsite_local_students');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          localStudents = parsed.filter((s: Student) => !companyId || s.companyId === companyId);
-        }
-      }
-    } catch {}
-
-    // 2. Query Firestore
     try {
       let q = query(collection(firestoreDb, 'students'), where('companyId', '==', companyId));
       if (filters?.gradeId) {
@@ -2563,34 +2548,27 @@ export const api = {
       }
       const snap = await withTimeout(getDocs(q), 6000);
       if (!snap.empty) {
-        resultList = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
+        let list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
+        if (filters?.academicYearId) {
+          list = list.filter((s) => !s.academicYearId || s.academicYearId === filters.academicYearId);
+        }
+        if (filters?.search && filters.search.trim()) {
+          const sTerm = filters.search.toLowerCase().trim();
+          list = list.filter(
+            (s) =>
+              s.fullName.toLowerCase().includes(sTerm) ||
+              s.admissionNo.toLowerCase().includes(sTerm) ||
+              s.id.toLowerCase().includes(sTerm)
+          );
+        }
+        return list.sort((a, b) => a.fullName.localeCompare(b.fullName));
       }
     } catch (err) {
       logError('getStudents', err, { companyId, filters });
     }
 
-    // Merge Firestore results with local students
-    const idMap = new Map<string, Student>();
-    for (const s of resultList) {
-      idMap.set(s.id, s);
-    }
-    for (const s of localStudents) {
-      if (!idMap.has(s.id)) {
-        idMap.set(s.id, s);
-      }
-    }
-
-    // 3. Include seed students for Gara Guri or empty sets
-    if (idMap.size === 0 || companyId === 'comp_gara_guri' || companyId.includes('gara_guri')) {
-      const seedList = INITIAL_STUDENTS.filter((s) => s.companyId === companyId);
-      for (const s of seedList) {
-        if (!idMap.has(s.id)) {
-          idMap.set(s.id, s);
-        }
-      }
-    }
-
-    let list = Array.from(idMap.values());
+    // Fallback to initial students
+    let list = INITIAL_STUDENTS.filter((s) => s.companyId === companyId);
     if (filters?.gradeId) {
       list = list.filter((s) => s.gradeId === filters.gradeId);
     }
@@ -2604,12 +2582,12 @@ export const api = {
       const sTerm = filters.search.toLowerCase().trim();
       list = list.filter(
         (s) =>
-          (s.fullName || '').toLowerCase().includes(sTerm) ||
-          (s.admissionNo || '').toLowerCase().includes(sTerm) ||
-          (s.id || '').toLowerCase().includes(sTerm)
+          s.fullName.toLowerCase().includes(sTerm) ||
+          s.admissionNo.toLowerCase().includes(sTerm) ||
+          s.id.toLowerCase().includes(sTerm)
       );
     }
-    return list.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+    return list.sort((a, b) => a.fullName.localeCompare(b.fullName));
   },
 
   createStudent: async (data: Partial<Student> & { companyId: string; fullName: string; gradeId: string; sectionId: string }): Promise<Student> => {
@@ -2640,23 +2618,11 @@ export const api = {
 
     try {
       await withTimeout(setDoc(docRef, payload), 8000);
+      return payload;
     } catch (err) {
       logError('createStudent', err, { id });
+      throw new ApiError(500, 'Failed to register student');
     }
-
-    // Always mirror to localStorage cache so mobile/offline previews instantly reflect the student
-    try {
-      const localStudents: Student[] = JSON.parse(localStorage.getItem('nabsite_local_students') || '[]');
-      const existingIdx = localStudents.findIndex((s) => s.id === id);
-      if (existingIdx >= 0) {
-        localStudents[existingIdx] = payload;
-      } else {
-        localStudents.push(payload);
-      }
-      localStorage.setItem('nabsite_local_students', JSON.stringify(localStudents));
-    } catch {}
-
-    return payload;
   },
 
   bulkCreateStudents: async (
@@ -2934,206 +2900,37 @@ export const api = {
   verifyStudentForPortal: async (
     companyId: string,
     fullName: string,
-    fanNumber: string,
-    altCompanyId?: string
+    fanNumber: string
   ): Promise<{ student: Student; grade: Grade | null; section: Section | null; academicYear: AcademicYear | null } | null> => {
     if (!fullName || !fanNumber) return null;
+    const cleanName = fullName.trim().toLowerCase();
+    const cleanFan = fanNumber.trim().toLowerCase();
 
-    // Normalizer to handle mobile keyboard spaces, unicode non-breaking spaces (\u00A0), multiple whitespaces, and casing
-    const normalizeText = (text: string) =>
-      (text || '')
-        .replace(/[\u00A0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toLowerCase();
-
-    const cleanName = normalizeText(fullName);
-    const cleanFan = normalizeText(fanNumber);
-    const cleanFanAlphanum = cleanFan.replace(/[^a-z0-9]/g, '');
-
-    if (!cleanName || !cleanFan) return null;
-
-    // FAN match predicate
-    const isFanMatch = (s: Student) => {
-      const sAdm = normalizeText(s.admissionNo || '');
-      const sId = normalizeText(s.id || '');
-      const sRoll = String((s as any).rollNo ?? '').trim().toLowerCase();
-
-      // Direct match
-      if (sAdm === cleanFan || sId === cleanFan) return true;
-
-      // Alphanumeric comparison (ignores slashes, hyphens, spaces, e.g. "ADM/2026/ZHK4" -> "adm2026zhk4")
-      const sAdmAlpha = sAdm.replace(/[^a-z0-9]/g, '');
-      const sIdAlpha = sId.replace(/[^a-z0-9]/g, '');
-
-      if (cleanFanAlphanum && (sAdmAlpha === cleanFanAlphanum || sIdAlpha === cleanFanAlphanum)) {
-        return true;
-      }
-
-      // Suffix or segment match (e.g. user types "ZHK4" or "2026/ZHK4")
-      if (cleanFanAlphanum.length >= 3) {
-        if (sAdmAlpha && (sAdmAlpha.endsWith(cleanFanAlphanum) || cleanFanAlphanum.endsWith(sAdmAlpha))) return true;
-        if (sIdAlpha && (sIdAlpha.endsWith(cleanFanAlphanum) || cleanFanAlphanum.endsWith(sIdAlpha))) return true;
-      }
-
-      if (sRoll && sRoll === cleanFan) return true;
-
-      return false;
-    };
-
-    // Full name match predicate
-    const isNameMatch = (s: Student) => {
-      const sFull = normalizeText(s.fullName || '');
-      const sFirst = normalizeText(s.firstName || '');
-      const sMiddle = normalizeText(s.middleName || '');
-      const sLast = normalizeText(s.lastName || '');
-
-      // 1. Direct exact match
-      if (sFull === cleanName) return true;
-
-      // 2. Constructed name parts
-      const constructed = normalizeText(`${sFirst} ${sMiddle} ${sLast}`);
-      if (constructed && constructed === cleanName) return true;
-
-      const firstLast = normalizeText(`${sFirst} ${sLast}`);
-      if (firstLast && firstLast === cleanName) return true;
-
-      // 3. Substring / Ethiopian 3-name match (e.g. entered "Abenezar Mitiku" for registered "Abenezar Mitiku Worku")
-      if (cleanName.length >= 3 && sFull.startsWith(cleanName)) return true;
-      if (sFull.length >= 3 && cleanName.startsWith(sFull)) return true;
-
-      // 4. Token-based matching
-      const inputTokens = cleanName.split(' ').filter(Boolean);
-      const studentTokens = sFull.split(' ').filter(Boolean);
-
-      if (inputTokens.length > 0 && studentTokens.length > 0) {
-        const allInputTokensPresent = inputTokens.every((token) =>
-          studentTokens.some((st) => st === token || st.startsWith(token) || token.startsWith(st))
-        );
-        if (allInputTokensPresent && (inputTokens.length >= 2 || studentTokens.length === 1)) {
-          return true;
-        }
-      }
-
-      return false;
-    };
-
-    // Aggregate candidates from multiple sources
-    const candidateStudents: Student[] = [];
-
-    // Source A: api.getStudents for companyId
-    try {
-      const listA = await api.getStudents(companyId);
-      candidateStudents.push(...listA);
-    } catch {}
-
-    // Source B: api.getStudents for altCompanyId (e.g. slug vs id)
-    if (altCompanyId && altCompanyId !== companyId) {
-      try {
-        const listB = await api.getStudents(altCompanyId);
-        candidateStudents.push(...listB);
-      } catch {}
-    }
-
-    // Source C: Check local storage cache
-    try {
-      const stored = localStorage.getItem('nabsite_local_students');
-      if (stored) {
-        const localList = JSON.parse(stored);
-        if (Array.isArray(localList)) {
-          candidateStudents.push(...localList);
-        }
-      }
-    } catch {}
-
-    // Source D: Direct Firestore query by admission number
-    try {
-      const rawFan = fanNumber.trim();
-      const qAdm = query(collection(firestoreDb, 'students'), where('admissionNo', '==', rawFan));
-      const snapAdm = await withTimeout(getDocs(qAdm), 5000);
-      if (!snapAdm.empty) {
-        snapAdm.docs.forEach((d) => candidateStudents.push({ id: d.id, ...d.data() } as Student));
-      }
-
-      const upperFan = rawFan.toUpperCase();
-      if (upperFan !== rawFan) {
-        const qUpper = query(collection(firestoreDb, 'students'), where('admissionNo', '==', upperFan));
-        const snapUpper = await withTimeout(getDocs(qUpper), 5000);
-        if (!snapUpper.empty) {
-          snapUpper.docs.forEach((d) => candidateStudents.push({ id: d.id, ...d.data() } as Student));
-        }
-      }
-
-      // Check by doc ID
-      const directDoc = await withTimeout(getDoc(doc(firestoreDb, 'students', rawFan)), 5000);
-      if (directDoc.exists()) {
-        candidateStudents.push({ id: directDoc.id, ...directDoc.data() } as Student);
-      }
-    } catch (e) {
-      // ignore
-    }
-
-    // Deduplicate candidate students by ID
-    const seen = new Set<string>();
-    const uniqueCandidates = candidateStudents.filter((s) => {
-      if (!s || !s.id) return false;
-      if (seen.has(s.id)) return false;
-      seen.add(s.id);
-      return true;
+    // Fetch all students for this company
+    const students = await api.getStudents(companyId);
+    
+    // Strict dual verification: both full name AND FAN / Admission No (or ID) must match
+    const matched = students.find((s) => {
+      const nameMatch = s.fullName.toLowerCase().trim() === cleanName;
+      const fanMatch =
+        s.admissionNo.toLowerCase().trim() === cleanFan ||
+        s.id.toLowerCase().trim() === cleanFan ||
+        s.admissionNo.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanFan.replace(/[^a-z0-9]/g, '') ||
+        s.id.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanFan.replace(/[^a-z0-9]/g, '');
+      return nameMatch && fanMatch;
     });
-
-    // Dual verification match
-    const matched = uniqueCandidates.find((s) => isFanMatch(s) && isNameMatch(s));
 
     if (!matched) return null;
 
-    const resolvedCompId = matched.companyId || companyId;
     const [grades, sections, years] = await Promise.all([
-      api.getGrades(resolvedCompId).catch(() => []),
-      api.getSections(resolvedCompId).catch(() => []),
-      api.getAcademicYears(resolvedCompId).catch(() => []),
+      api.getGrades(companyId),
+      api.getSections(companyId),
+      api.getAcademicYears(companyId),
     ]);
 
-    let grade = grades.find((g) => g.id === matched.gradeId) || null;
-    let section = sections.find((s) => s.id === matched.sectionId) || null;
-    let academicYear =
-      years.find((y) => y.id === matched.academicYearId) || years.find((y) => y.isActive) || null;
-
-    if (!grade && matched.gradeId) {
-      grade = {
-        id: matched.gradeId,
-        companyId: resolvedCompId,
-        name: matched.gradeId.replace(/^(gr_|grade_)/i, 'Grade ').replace(/_/g, ' '),
-        level: 9,
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      } as unknown as Grade;
-    }
-    if (!section && matched.sectionId) {
-      section = {
-        id: matched.sectionId,
-        companyId: resolvedCompId,
-        gradeId: matched.gradeId,
-        name: matched.sectionId.replace(/^(sec_|section_)/i, 'Section ').replace(/_/g, ' '),
-        capacity: 40,
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      } as unknown as Section;
-    }
-    if (!academicYear) {
-      academicYear = {
-        id: matched.academicYearId || 'ay_current',
-        companyId: resolvedCompId,
-        name: '2025/2026 Academic Year',
-        code: '2026',
-        isActive: true,
-        calendarType: 'gregorian',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      } as unknown as AcademicYear;
-    }
+    const grade = grades.find((g) => g.id === matched.gradeId) || null;
+    const section = sections.find((s) => s.id === matched.sectionId) || null;
+    const academicYear = years.find((y) => y.id === matched.academicYearId) || years.find((y) => y.isActive) || null;
 
     return {
       student: matched,
@@ -3154,51 +2951,25 @@ export const api = {
     weightedTotal: number | null;
   }>> => {
     try {
-      const [allStudents, allSubjects] = await Promise.all([
-        api.getStudents(companyId).catch(() => []),
-        api.getSubjects(companyId).catch(() => []),
+      const [allStudents, allSubjects, allGrades] = await Promise.all([
+        api.getStudents(companyId),
+        api.getSubjects(companyId),
+        api.getGrades(companyId),
       ]);
 
-      let student = allStudents.find((s) => s.id === studentId);
-
-      // If student not found in company list, check direct doc or local storage
-      if (!student) {
-        try {
-          const docSnap = await getDoc(doc(firestoreDb, 'students', studentId));
-          if (docSnap.exists()) {
-            student = { id: docSnap.id, ...docSnap.data() } as Student;
-          }
-        } catch {}
-      }
-      if (!student) {
-        try {
-          const stored = localStorage.getItem('nabsite_local_students');
-          if (stored) {
-            const list = JSON.parse(stored);
-            student = list.find((s: any) => s.id === studentId);
-          }
-        } catch {}
-      }
-      if (!student) {
-        student = INITIAL_STUDENTS.find((s) => s.id === studentId);
-      }
+      const student = allStudents.find((s) => s.id === studentId);
       if (!student) return [];
 
-      let studentSubjects = allSubjects.filter(
+      const studentSubjects = allSubjects.filter(
         (sub) => sub.isCommon || (sub.gradeIds && sub.gradeIds.includes(student.gradeId))
       );
-      if (studentSubjects.length === 0) {
-        studentSubjects = INITIAL_SUBJECTS.filter(
-          (sub) => sub.isCommon || (sub.gradeIds && sub.gradeIds.includes(student.gradeId))
-        );
-      }
 
       // Query marklists for student's grade & section
       let allMarklists: Marklist[] = [];
       try {
         const q = query(
           collection(firestoreDb, 'marklists'),
-          where('companyId', '==', student.companyId || companyId),
+          where('companyId', '==', companyId),
           where('gradeId', '==', student.gradeId),
           where('sectionId', '==', student.sectionId)
         );
@@ -3211,10 +2982,7 @@ export const api = {
       }
 
       const seedLists = INITIAL_MARKLISTS.filter(
-        (m) =>
-          (m.companyId === companyId || m.companyId === student.companyId) &&
-          m.gradeId === student.gradeId &&
-          m.sectionId === student.sectionId
+        (m) => m.companyId === companyId && m.gradeId === student.gradeId && m.sectionId === student.sectionId
       );
 
       return studentSubjects.map((sub) => {
