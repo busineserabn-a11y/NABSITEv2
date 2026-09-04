@@ -18,10 +18,12 @@ import {
   CalendarCheck,
   Megaphone,
   ShieldAlert,
+  HelpCircle,
   ArrowLeft,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { can } from '../../lib/permissions';
 import {
   Company,
   AcademicYear,
@@ -41,6 +43,8 @@ import { SchoolAttendanceView } from '../../components/school/SchoolAttendanceVi
 import { SchoolTeachersView } from '../../components/school/SchoolTeachersView';
 import { SchoolAnnouncementsView } from '../../components/school/SchoolAnnouncementsView';
 import { SchoolGlobalSearchView } from '../../components/school/SchoolGlobalSearchView';
+import { SchoolDisciplineView } from '../../components/school/SchoolDisciplineView';
+import { SchoolFaqView } from '../../components/school/SchoolFaqView';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 
@@ -51,9 +55,11 @@ type AcademicTab =
   | 'grades'
   | 'subjects'
   | 'students'
+  | 'discipline'
   | 'attendance'
   | 'teachers'
   | 'announcements'
+  | 'faq'
   | 'search';
 
 export const SchoolAcademicHubPage: React.FC = () => {
@@ -72,9 +78,11 @@ export const SchoolAcademicHubPage: React.FC = () => {
     'grades',
     'subjects',
     'students',
+    'discipline',
     'attendance',
     'teachers',
     'announcements',
+    'faq',
     'search',
   ];
   const initialTab: AcademicTab = tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'dashboard';
@@ -225,6 +233,8 @@ export const SchoolAcademicHubPage: React.FC = () => {
   }
 
   const activeAcademicYear = academicYears.find((y) => y.isActive) || academicYears[0];
+  const canViewDiscipline = can(user, 'discipline', company.id, 'view');
+  const canViewFaq = can(user, 'school_faq', company.id, 'view');
 
   return (
     <div className="space-y-6">
@@ -324,6 +334,20 @@ export const SchoolAcademicHubPage: React.FC = () => {
           <span>Students Roster ({students.length})</span>
         </button>
 
+        {canViewDiscipline && (
+          <button
+            onClick={() => handleTabChange('discipline')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeTab === 'discipline'
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <ShieldAlert className="w-4 h-4" />
+            <span>Discipline / Behavior</span>
+          </button>
+        )}
+
         <button
           onClick={() => handleTabChange('attendance')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
@@ -359,6 +383,20 @@ export const SchoolAcademicHubPage: React.FC = () => {
           <Megaphone className="w-4 h-4" />
           <span>Notice Board</span>
         </button>
+
+        {canViewFaq && (
+          <button
+            onClick={() => handleTabChange('faq')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeTab === 'faq'
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <HelpCircle className="w-4 h-4" />
+            <span>School FAQ</span>
+          </button>
+        )}
 
         <button
           onClick={() => handleTabChange('academic-years')}
@@ -442,6 +480,22 @@ export const SchoolAcademicHubPage: React.FC = () => {
           />
         )}
 
+        {activeTab === 'discipline' && (
+          canViewDiscipline ? (
+            <SchoolDisciplineView
+              company={company}
+              students={students}
+              onRefresh={handleRefresh}
+            />
+          ) : (
+            <div className="p-8 text-center text-rose-500 bg-rose-50 dark:bg-rose-950/20 rounded-2xl border border-rose-200 dark:border-rose-900">
+              <ShieldAlert className="w-8 h-8 mx-auto mb-2" />
+              <p className="font-bold">Access Restricted</p>
+              <p className="text-xs text-slate-500 mt-1">You do not have permission to view Discipline records for this school.</p>
+            </div>
+          )
+        )}
+
         {activeTab === 'attendance' && (
           <SchoolAttendanceView
             company={company}
@@ -468,6 +522,21 @@ export const SchoolAcademicHubPage: React.FC = () => {
             company={company}
             onRefresh={handleRefresh}
           />
+        )}
+
+        {activeTab === 'faq' && (
+          canViewFaq ? (
+            <SchoolFaqView
+              company={company}
+              onRefresh={handleRefresh}
+            />
+          ) : (
+            <div className="p-8 text-center text-rose-500 bg-rose-50 dark:bg-rose-950/20 rounded-2xl border border-rose-200 dark:border-rose-900">
+              <ShieldAlert className="w-8 h-8 mx-auto mb-2" />
+              <p className="font-bold">Access Restricted</p>
+              <p className="text-xs text-slate-500 mt-1">You do not have permission to view the School FAQ module for this school.</p>
+            </div>
+          )
         )}
 
         {activeTab === 'academic-years' && (

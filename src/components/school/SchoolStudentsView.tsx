@@ -15,6 +15,7 @@ import {
   Layers,
   Upload,
   FileSpreadsheet,
+  Eye,
 } from 'lucide-react';
 import { Student, Grade, Section, AcademicYear, Company } from '../../types';
 import { api } from '../../lib/api';
@@ -23,6 +24,7 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { StudentUploadModal } from './StudentUploadModal';
 import { StudentRegistrationSpreadsheet } from './StudentRegistrationSpreadsheet';
+import { StudentProfileModal } from './StudentProfileModal';
 
 interface SchoolStudentsViewProps {
   company: Company;
@@ -51,6 +53,7 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
   const [modalOpen, setModalOpen] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [profileStudent, setProfileStudent] = useState<Student | null>(null);
   const [formData, setFormData] = useState({
     fullName: '',
     admissionNo: '',
@@ -417,6 +420,13 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
+                            onClick={() => setProfileStudent(stu)}
+                            className="p-1.5 text-slate-400 hover:text-amber-500 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                            title="View Student Profile & Discipline History"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() => openEditModal(stu)}
                             className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                             title="Edit Student"
@@ -631,6 +641,20 @@ export const SchoolStudentsView: React.FC<SchoolStudentsViewProps> = ({
         sections={sections}
         onUploadSuccess={onRefresh}
       />
+
+      {/* Student Profile & Discipline Modal */}
+      {profileStudent && (
+        <StudentProfileModal
+          isOpen={!!profileStudent}
+          onClose={() => setProfileStudent(null)}
+          student={profileStudent}
+          company={company}
+          grade={grades.find((g) => g.id === profileStudent.gradeId)}
+          section={sections.find((s) => s.id === profileStudent.sectionId)}
+          academicYear={academicYears.find((y) => y.id === profileStudent.academicYearId)}
+          onDisciplineRecordAdded={onRefresh}
+        />
+      )}
     </div>
   );
 };

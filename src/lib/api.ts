@@ -48,6 +48,9 @@ import {
   AttendanceSession,
   StudentAttendanceEntry,
   SchoolAnnouncement,
+  DisciplineRecord,
+  DisciplineFollowUpStatus,
+  SchoolFaq,
 } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_SETTINGS, INITIAL_COMPANIES, INITIAL_WEBSITES, INITIAL_ANNOUNCEMENTS } from '../data/seed';
 import {
@@ -3354,5 +3357,244 @@ export const api = {
     });
 
     return results;
+  },
+
+  // --- 11. Discipline & Student Behavior Records ---
+  getDisciplineRecords: async (companyId: string, studentId?: string): Promise<DisciplineRecord[]> => {
+    try {
+      let q = query(
+        collection(firestoreDb, 'disciplineRecords'),
+        where('companyId', '==', companyId)
+      );
+      if (studentId) {
+        q = query(
+          collection(firestoreDb, 'disciplineRecords'),
+          where('companyId', '==', companyId),
+          where('studentId', '==', studentId)
+        );
+      }
+      const snap = await withTimeout(getDocs(q), 6000);
+      if (!snap.empty) {
+        const records = snap.docs.map((d) => ({ id: d.id, ...d.data() } as DisciplineRecord));
+        return records.sort((a, b) => new Date(b.incidentDate || b.createdAt).getTime() - new Date(a.incidentDate || a.createdAt).getTime());
+      }
+      return [];
+    } catch (err) {
+      logError('getDisciplineRecords', err, { companyId, studentId });
+      return [];
+    }
+  },
+
+  getDisciplineRecord: async (id: string): Promise<DisciplineRecord | null> => {
+    try {
+      const snap = await withTimeout(getDoc(doc(firestoreDb, 'disciplineRecords', id)), 5000);
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() } as DisciplineRecord;
+      }
+      return null;
+    } catch (err) {
+      logError('getDisciplineRecord', err, { id });
+      return null;
+    }
+  },
+
+  createDisciplineRecord: async (
+    companyId: string,
+    data: {
+      studentId: string;
+      incidentDate: string;
+      description: string;
+      actionTaken: string;
+      followUpStatus: DisciplineFollowUpStatus;
+    },
+    actor: { id: string; name: string }
+  ): Promise<DisciplineRecord> => {
+    const nowIso = new Date().toISOString();
+    const id = `disc_${companyId.replace('comp_', '')}_${Date.now()}`;
+    const newRecord: DisciplineRecord = {
+      id,
+      companyId,
+      studentId: data.studentId,
+      incidentDate: data.incidentDate,
+      description: data.description.trim(),
+      actionTaken: data.actionTaken.trim(),
+      followUpStatus: data.followUpStatus || 'Pending',
+      createdBy: actor.name || 'School Administrator',
+      createdById: actor.id,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      await withTimeout(setDoc(doc(firestoreDb, 'disciplineRecords', id), newRecord), 8000);
+      await logAudit('CREATE', 'DISCIPLINE_RECORD', id, `Logged discipline incident for student ${data.studentId} at ${companyId}`);
+      return newRecord;
+    } catch (err) {
+      logError('createDisciplineRecord', err, { companyId, id });
+      throw new ApiError(500, 'Failed to save discipline record to Firestore.');
+    }
+  },
+
+  updateDisciplineRecord: async (
+    id: string,
+    data: Partial<DisciplineRecord>,
+    actor?: { id: string; name: string }
+  ): Promise<DisciplineRecord> => {
+    const nowIso = new Date().toISOString();
+    const updatePayload = {
+      ...data,
+      updatedAt: nowIso,
+    };
+    try {
+      await withTimeout(updateDoc(doc(firestoreDb, 'disciplineRecords', id), updatePayload), 8000);
+      await logAudit('UPDATE', 'DISCIPLINE_RECORD', id, `Updated discipline record ${id}`);
+      const updated = await api.getDisciplineRecord(id);
+      return updated!;
+    } catch (err) {
+      logError('updateDisciplineRecord', err, { id });
+      throw new ApiError(500, 'Failed to update discipline record in Firestore.');
+    }
+  },
+
+  deleteDisciplineRecord: async (id: string, companyId: string): Promise<boolean> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'disciplineRecords', id)), 8000);
+      await logAudit('DELETE', 'DISCIPLINE_RECORD', id, `Deleted discipline record ${id} at ${companyId}`);
+      return true;
+    } catch (err) {
+      logError('deleteDisciplineRecord', err, { id, companyId });
+      throw new ApiError(500, 'Failed to delete discipline record from Firestore.');
+    }
+  },
+
+  // --- 12. School FAQ Management ---
+  getSchoolFaqs: async (
+    companyId: string,
+    options?: { publishedOnly?: boolean }
+  ): Promise<SchoolFaq[]> => {
+    try {
+      let q = query(
+        collection(firestoreDb, 'schoolFaqs'),
+        where('companyId', '==', companyId)
+      );
+      if (options?.publishedOnly) {
+        q = query(
+          collection(firestoreDb, 'schoolFaqs'),
+          where('companyId', '==', companyId),
+          where('published', '==', true)
+        );
+      }
+      const snap = await withTimeout(getDocs(q), 6000);
+      if (!snap.empty) {
+        const faqs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as SchoolFaq));
+        return faqs.sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+      }
+      return [];
+    } catch (err) {
+      logError('getSchoolFaqs', err, { companyId, options });
+      return [];
+    }
+  },
+
+  getSchoolFaq: async (id: string): Promise<SchoolFaq | null> => {
+    try {
+      const snap = await withTimeout(getDoc(doc(firestoreDb, 'schoolFaqs', id)), 5000);
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() } as SchoolFaq;
+      }
+      return null;
+    } catch (err) {
+      logError('getSchoolFaq', err, { id });
+      return null;
+    }
+  },
+
+  createSchoolFaq: async (
+    companyId: string,
+    data: {
+      question: string;
+      answer: string;
+      category?: string;
+      displayOrder?: number;
+      published?: boolean;
+    },
+    actor: { id: string; name: string }
+  ): Promise<SchoolFaq> => {
+    const nowIso = new Date().toISOString();
+    const id = `faq_${companyId.replace('comp_', '')}_${Date.now()}`;
+    const newFaq: SchoolFaq = {
+      id,
+      companyId,
+      question: data.question.trim(),
+      answer: data.answer.trim(),
+      category: data.category?.trim() || 'General',
+      displayOrder: data.displayOrder ?? 1,
+      published: data.published ?? true,
+      createdBy: actor.name || 'School Administrator',
+      createdById: actor.id,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      await withTimeout(setDoc(doc(firestoreDb, 'schoolFaqs', id), newFaq), 8000);
+      await logAudit('CREATE', 'SCHOOL_FAQ', id, `Created school FAQ '${newFaq.question}' for ${companyId}`);
+      return newFaq;
+    } catch (err) {
+      logError('createSchoolFaq', err, { companyId, id });
+      throw new ApiError(500, 'Failed to save FAQ to Firestore.');
+    }
+  },
+
+  updateSchoolFaq: async (
+    id: string,
+    data: Partial<SchoolFaq>,
+    actor?: { id: string; name: string }
+  ): Promise<SchoolFaq> => {
+    const nowIso = new Date().toISOString();
+    const updatePayload = {
+      ...data,
+      updatedAt: nowIso,
+    };
+    try {
+      await withTimeout(updateDoc(doc(firestoreDb, 'schoolFaqs', id), updatePayload), 8000);
+      await logAudit('UPDATE', 'SCHOOL_FAQ', id, `Updated FAQ ${id}`);
+      const updated = await api.getSchoolFaq(id);
+      return updated!;
+    } catch (err) {
+      logError('updateSchoolFaq', err, { id });
+      throw new ApiError(500, 'Failed to update FAQ in Firestore.');
+    }
+  },
+
+  reorderSchoolFaqs: async (
+    companyId: string,
+    faqOrders: Array<{ id: string; displayOrder: number }>
+  ): Promise<boolean> => {
+    try {
+      const batch = writeBatch(firestoreDb);
+      const nowIso = new Date().toISOString();
+      faqOrders.forEach((item) => {
+        const ref = doc(firestoreDb, 'schoolFaqs', item.id);
+        batch.update(ref, { displayOrder: item.displayOrder, updatedAt: nowIso });
+      });
+      await withTimeout(batch.commit(), 8000);
+      await logAudit('REORDER', 'SCHOOL_FAQ', companyId, `Reordered ${faqOrders.length} FAQs for ${companyId}`);
+      return true;
+    } catch (err) {
+      logError('reorderSchoolFaqs', err, { companyId, count: faqOrders.length });
+      throw new ApiError(500, 'Failed to update FAQ display orders in Firestore.');
+    }
+  },
+
+  deleteSchoolFaq: async (id: string, companyId: string): Promise<boolean> => {
+    try {
+      await withTimeout(deleteDoc(doc(firestoreDb, 'schoolFaqs', id)), 8000);
+      await logAudit('DELETE', 'SCHOOL_FAQ', id, `Deleted FAQ ${id} at ${companyId}`);
+      return true;
+    } catch (err) {
+      logError('deleteSchoolFaq', err, { id, companyId });
+      throw new ApiError(500, 'Failed to delete FAQ from Firestore.');
+    }
   },
 };

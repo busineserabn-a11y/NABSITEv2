@@ -41,6 +41,7 @@ import {
   Megaphone,
   Newspaper,
   School,
+  HelpCircle,
 } from 'lucide-react';
 import {
   Company,
@@ -66,6 +67,7 @@ import { MenuItemDetailModal } from './MenuItemDetailModal';
 import { DigitalMenuRenderer } from './DigitalMenuRenderer';
 import { CategorySectionDispatcher } from './CategorySections';
 import { SchoolStudentPortalView } from '../school/SchoolStudentPortalView';
+import { SchoolPublicFaqView } from '../school/SchoolPublicFaqView';
 
 export interface WebsiteRendererProps {
   company: Company;
@@ -890,6 +892,14 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
   // FAQ ACCORDION SECTION
   // -------------------------------------------------------------
   const renderFaqSection = () => {
+    if (isSchool) {
+      return (
+        <section id="faq" className="border-t border-slate-200/80 dark:border-slate-800">
+          <SchoolPublicFaqView company={company} design={design} />
+        </section>
+      );
+    }
+
     const faqs = [
       { q: `What are ${company.name}'s prime specialties?`, a: company.shortDescription || `We deliver exceptional ${company.category} services crafted with authentic quality.` },
       { q: `How do I place an order or make a reservation?`, a: `You can reach out directly via our phone line (${company.phone || 'listed above'}) or message us instantly on Telegram (@${company.telegramUsername || 'channel'}).` },
@@ -1755,6 +1765,7 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
   const isPageOffers = currentSlug === 'offers';
   const isPageAbout = currentSlug === 'about' || currentSlug === 'school-info' || currentSlug === 'about-us' || currentSlug === 'info';
   const isPageAnnouncements = currentSlug === 'announcements' || currentSlug === 'news' || currentSlug === 'beeksisa';
+  const isPageFaq = currentSlug === 'faq' || currentSlug === 'faqs' || currentSlug === 'school-faq';
   const isPageStudent =
     currentSlug === 'student' ||
     currentSlug === 'student-portal' ||
@@ -1859,6 +1870,18 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 >
                   <GraduationCap className="w-3.5 h-3.5 text-amber-500" />
                   <span>About the Student</span>
+                </button>
+              )}
+
+              {isSchool && (
+                <button
+                  onClick={() => handlePageClick('faq')}
+                  className={`px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
+                    isPageFaq ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 font-bold' : 'hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-amber-500" />
+                  <span>FAQ</span>
                 </button>
               )}
 
@@ -2000,6 +2023,18 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
                 </button>
               )}
 
+              {isSchool && (
+                <button
+                  onClick={() => { handlePageClick('faq'); setMobileMenuOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-between ${
+                    isPageFaq ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  <span>❓ Frequently Asked Questions (FAQ)</span>
+                  <ChevronRight className="w-4 h-4 opacity-50" />
+                </button>
+              )}
+
               {announcements.length > 0 && (
                 <button
                   onClick={() => { handlePageClick('announcements'); setMobileMenuOpen(false); }}
@@ -2092,6 +2127,11 @@ export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({
       {isPageStudent ? (
         <div className="space-y-12">
           <SchoolStudentPortalView company={company} onNavigatePage={handlePageClick} />
+          {renderSectionContainer('contact', renderContactSection())}
+        </div>
+      ) : isPageFaq ? (
+        <div className="space-y-12">
+          <SchoolPublicFaqView company={company} design={design} />
           {renderSectionContainer('contact', renderContactSection())}
         </div>
       ) : isPageAbout ? (

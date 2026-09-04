@@ -40,7 +40,17 @@ export type SubAdminPermission =
   | 'manage_features'
   | 'manage_store'
   | 'view_analytics'
-  | 'manage_qr';
+  | 'manage_qr'
+  | 'view_discipline'
+  | 'create_discipline'
+  | 'edit_discipline'
+  | 'delete_discipline'
+  | 'view_school_faq'
+  | 'create_school_faq'
+  | 'edit_school_faq'
+  | 'delete_school_faq'
+  | 'publish_school_faq'
+  | 'reorder_school_faq';
 
 export interface User {
   id: string;
@@ -1109,6 +1119,38 @@ export interface SchoolSearchResult {
   badge?: string;
   details?: Record<string, any>;
   linkTab?: string;
+}
+
+// --- Discipline & Behavior Records ---
+export type DisciplineFollowUpStatus = 'Pending' | 'In Progress' | 'Resolved';
+
+export interface DisciplineRecord {
+  id: string;
+  companyId: string;
+  studentId: string;
+  incidentDate: string; // YYYY-MM-DD
+  description: string;
+  actionTaken: string;
+  followUpStatus: DisciplineFollowUpStatus;
+  createdBy: string;
+  createdById?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- School & Company FAQs ---
+export interface SchoolFaq {
+  id: string;
+  companyId: string;
+  question: string;
+  answer: string;
+  category?: string;
+  displayOrder: number;
+  published: boolean;
+  createdBy: string;
+  createdById?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 

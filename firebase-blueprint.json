@@ -236,6 +236,44 @@
         "status": { "type": "string", "enum": ["draft", "submitted", "published"] }
       },
       "required": ["id", "companyId", "academicYearId", "gradeId", "sectionId", "subjectId"]
+    },
+    "DisciplineRecord": {
+      "title": "DisciplineRecord",
+      "description": "Student discipline and behavioral incident records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "incidentDate": { "type": "string", "maxLength": 32 },
+        "description": { "type": "string", "maxLength": 2048 },
+        "actionTaken": { "type": "string", "maxLength": 2048 },
+        "followUpStatus": { "type": "string", "enum": ["Pending", "In Progress", "Resolved"] },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdById": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "companyId", "studentId", "incidentDate", "description", "actionTaken", "followUpStatus"]
+    },
+    "SchoolFaq": {
+      "title": "SchoolFaq",
+      "description": "Frequently asked questions for school websites",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "companyId": { "type": "string", "maxLength": 128 },
+        "question": { "type": "string", "maxLength": 512 },
+        "answer": { "type": "string", "maxLength": 4096 },
+        "category": { "type": "string", "maxLength": 128 },
+        "displayOrder": { "type": "number" },
+        "published": { "type": "boolean" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdById": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "companyId", "question", "answer", "displayOrder", "published"]
     }
   },
   "firestore": {
@@ -298,6 +336,14 @@
     "/marklists/{marklistId}": {
       "schema": "Marklist",
       "description": "Student marks and scores per class and subject"
+    },
+    "/disciplineRecords/{recordId}": {
+      "schema": "DisciplineRecord",
+      "description": "Student discipline and behavioral incident records"
+    },
+    "/schoolFaqs/{faqId}": {
+      "schema": "SchoolFaq",
+      "description": "School frequently asked questions"
     },
     "/settings/{settingDoc}": {
       "schema": { "$ref": "PlatformSettings" },

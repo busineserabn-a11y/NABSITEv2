@@ -70,6 +70,8 @@ const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
   BarChart3,
   Image,
   Settings,
+  ShieldAlert,
+  HelpCircle,
 };
 
 export const PermissionsManagerModal: React.FC<PermissionsManagerModalProps> = ({
@@ -226,6 +228,16 @@ export const PermissionsManagerModal: React.FC<PermissionsManagerModalProps> = (
       if (matrix.companies?.includes('edit')) {
         legacyPerms.push('edit_business_info', 'manage_hours');
       }
+      if (matrix.discipline?.includes('view')) legacyPerms.push('view_discipline');
+      if (matrix.discipline?.includes('create')) legacyPerms.push('create_discipline');
+      if (matrix.discipline?.includes('edit')) legacyPerms.push('edit_discipline');
+      if (matrix.discipline?.includes('delete')) legacyPerms.push('delete_discipline');
+      if (matrix.school_faq?.includes('view')) legacyPerms.push('view_school_faq');
+      if (matrix.school_faq?.includes('create')) legacyPerms.push('create_school_faq');
+      if (matrix.school_faq?.includes('edit')) legacyPerms.push('edit_school_faq');
+      if (matrix.school_faq?.includes('delete')) legacyPerms.push('delete_school_faq');
+      if (matrix.school_faq?.includes('publish')) legacyPerms.push('publish_school_faq');
+      if (matrix.school_faq?.includes('reorder')) legacyPerms.push('reorder_school_faq');
 
       const updatedUser = await api.updateUserPermissions(user.id, {
         permissionMatrix: matrix as any,
@@ -476,7 +488,7 @@ export const PermissionsManagerModal: React.FC<PermissionsManagerModalProps> = (
                   <th className="py-3 px-4 font-semibold text-slate-900 dark:text-white w-1/3">
                     Module & Capability
                   </th>
-                  {(['view', 'create', 'edit', 'delete', 'publish', 'unpublish', 'export', 'manage'] as PermissionAction[]).map(
+                  {(['view', 'create', 'edit', 'delete', 'publish', 'unpublish', 'reorder', 'export', 'manage'] as PermissionAction[]).map(
                     (action) => (
                       <th
                         key={action}
@@ -526,7 +538,7 @@ export const PermissionsManagerModal: React.FC<PermissionsManagerModalProps> = (
                         </div>
                       </td>
 
-                      {(['view', 'create', 'edit', 'delete', 'publish', 'unpublish', 'export', 'manage'] as PermissionAction[]).map(
+                      {(['view', 'create', 'edit', 'delete', 'publish', 'unpublish', 'reorder', 'export', 'manage'] as PermissionAction[]).map(
                         (action) => {
                           const isSupported = mod.supportedActions.includes(action);
                           const isChecked = currentActions.includes(action);

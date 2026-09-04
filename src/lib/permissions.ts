@@ -16,7 +16,9 @@ export type PermissionModule =
   | 'qr'
   | 'analytics'
   | 'media'
-  | 'settings';
+  | 'settings'
+  | 'discipline'
+  | 'school_faq';
 
 /**
  * NABSITE Granular Actions
@@ -29,7 +31,8 @@ export type PermissionAction =
   | 'publish'
   | 'unpublish'
   | 'export'
-  | 'manage';
+  | 'manage'
+  | 'reorder';
 
 /**
  * Permission Matrix: Mapping from Module to allowed Actions
@@ -153,6 +156,22 @@ export const PERMISSION_MODULES: ModuleDefinition[] = [
     icon: 'Settings',
     supportedActions: ['view', 'edit', 'manage'],
   },
+  {
+    key: 'discipline',
+    label: 'Discipline / Behavior',
+    category: 'operations',
+    description: 'Student behavioral incident records, actions taken, disciplinary follow-up, and resolution tracking.',
+    icon: 'ShieldAlert',
+    supportedActions: ['view', 'create', 'edit', 'delete'],
+  },
+  {
+    key: 'school_faq',
+    label: 'School FAQ',
+    category: 'content',
+    description: 'Frequently asked questions for school inquiries, parent information, and live website FAQ display.',
+    icon: 'HelpCircle',
+    supportedActions: ['view', 'create', 'edit', 'delete', 'publish', 'unpublish', 'reorder'],
+  },
 ];
 
 /**
@@ -167,6 +186,7 @@ export const ACTION_LABELS: Record<PermissionAction, { label: string; desc: stri
   unpublish: { label: 'Unpublish', desc: 'Take live content offline / draft' },
   export: { label: 'Export', desc: 'Download CSV, Excel, or PDF reports' },
   manage: { label: 'Manage', desc: 'Full administrator override' },
+  reorder: { label: 'Reorder', desc: 'Change display order sequence' },
 };
 
 /**
@@ -186,6 +206,8 @@ export const DEFAULT_ADMIN_MATRIX: PermissionMatrix = {
   analytics: ['view', 'export'],
   media: ['view', 'create', 'edit', 'delete', 'manage'],
   settings: ['view', 'edit'],
+  discipline: ['view', 'create', 'edit', 'delete'],
+  school_faq: ['view', 'create', 'edit', 'delete', 'publish', 'unpublish', 'reorder'],
 };
 
 export const DEFAULT_SUB_ADMIN_MATRIX: PermissionMatrix = {
@@ -202,6 +224,8 @@ export const DEFAULT_SUB_ADMIN_MATRIX: PermissionMatrix = {
   analytics: ['view'],
   media: ['view', 'create', 'edit'],
   settings: ['view'],
+  discipline: ['view', 'create', 'edit', 'delete'],
+  school_faq: ['view', 'create', 'edit', 'publish', 'unpublish', 'reorder', 'delete'],
 };
 
 export const READ_ONLY_MATRIX: PermissionMatrix = {
@@ -218,6 +242,8 @@ export const READ_ONLY_MATRIX: PermissionMatrix = {
   analytics: ['view'],
   media: ['view'],
   settings: ['view'],
+  discipline: ['view'],
+  school_faq: ['view'],
 };
 
 export const CONTENT_CREATOR_MATRIX: PermissionMatrix = {
@@ -234,6 +260,8 @@ export const CONTENT_CREATOR_MATRIX: PermissionMatrix = {
   analytics: ['view'],
   media: ['view', 'create', 'edit', 'delete'],
   settings: ['view'],
+  discipline: ['view', 'create'],
+  school_faq: ['view', 'create', 'edit', 'publish', 'reorder'],
 };
 
 /**
@@ -288,6 +316,28 @@ export function normalizePermissionMatrix(user: Partial<User>): PermissionMatrix
   }
   if (perms.includes('edit_business_info') || perms.includes('manage_hours')) {
     matrix.companies = ['view', 'edit'];
+  }
+
+  // Map discipline permissions
+  const disciplineActions: PermissionAction[] = [];
+  if (perms.includes('view_discipline') || user.role === 'SUB_ADMIN') disciplineActions.push('view');
+  if (perms.includes('create_discipline') || user.role === 'SUB_ADMIN') disciplineActions.push('create');
+  if (perms.includes('edit_discipline') || user.role === 'SUB_ADMIN') disciplineActions.push('edit');
+  if (perms.includes('delete_discipline')) disciplineActions.push('delete');
+  if (disciplineActions.length > 0) {
+    matrix.discipline = disciplineActions;
+  }
+
+  // Map school FAQ permissions
+  const faqActions: PermissionAction[] = [];
+  if (perms.includes('view_school_faq') || user.role === 'SUB_ADMIN') faqActions.push('view');
+  if (perms.includes('create_school_faq') || user.role === 'SUB_ADMIN') faqActions.push('create');
+  if (perms.includes('edit_school_faq') || user.role === 'SUB_ADMIN') faqActions.push('edit');
+  if (perms.includes('delete_school_faq') || user.role === 'SUB_ADMIN') faqActions.push('delete');
+  if (perms.includes('publish_school_faq') || user.role === 'SUB_ADMIN') faqActions.push('publish', 'unpublish');
+  if (perms.includes('reorder_school_faq') || user.role === 'SUB_ADMIN') faqActions.push('reorder');
+  if (faqActions.length > 0) {
+    matrix.school_faq = faqActions;
   }
 
   return matrix;
